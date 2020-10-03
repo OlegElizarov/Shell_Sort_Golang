@@ -1,0 +1,16 @@
+run:
+  deadline: 30s
+  tests: true
+
+linters:
+  enable-all: true
+  disable:
+    - maligned
+    - gofumpt
+    - lll
+    - wsl
+    - dupl
+
+issues:
+  exclude:
+    - should have a package comment

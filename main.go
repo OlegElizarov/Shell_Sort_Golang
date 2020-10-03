@@ -9,5 +9,4 @@ func main() {
 	fmt.Println("Hello")
 	fmt.Println(lib.ShellSort(lib.IntSliceShort))
 	fmt.Println(lib.ShellSort(lib.IntSliceBig))
-
 }

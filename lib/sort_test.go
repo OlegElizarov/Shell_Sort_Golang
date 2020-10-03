@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"sort"
 	"testing"
+	"time"
 )
 
 func TestShellSort(t *testing.T) {
@@ -27,17 +28,17 @@ func TestShellSort(t *testing.T) {
 	}
 }
 
-//func TestShellSort1(t *testing.T) {
+// func TestShellSort1(t *testing.T) {
 //	require.Equal(t, ShellSort(IntSliceShort), IntSliceCorrect)
 //	require.True(t, sort.IsSorted(sort.IntSlice(ShellSort(IntSliceShort))))
 //}
 //
-//func TestShellSort2(t *testing.T) {
+// func TestShellSort2(t *testing.T) {
 //	require.True(t, sort.IsSorted(sort.IntSlice(ShellSort(IntSliceBig))))
 //}
 //
-//func TestShellSort3(t *testing.T) {
-//	//fmt.Println("500 numbers arr")
+// func TestShellSort3(t *testing.T) {
+//	fmt.Println("500 numbers arr")
 //	require.Equal(t, ShellSort(IntSliceVeryBig), IntSliceVeryBigCorrect)
 //}
 
@@ -54,3 +55,20 @@ func TestSelectStepHibbard(t *testing.T) {
 	//require.True(t, d[0]*3 < length)
 	require.Equal(t, d[(len(d))-1], 1)
 }
+
+func BenchmarkshellSort(i int, b *testing.B) {
+	rand.Seed(time.Now().Unix())
+	slice := rand.Perm(i)
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			ShellSort(slice)
+		}
+	})
+}
+
+func BenchmarkShellSort1(b *testing.B) { BenchmarkshellSort(10000, b) }
+func BenchmarkShellSort2(b *testing.B) { BenchmarkshellSort(20000, b) }
+func BenchmarkShellSort3(b *testing.B) { BenchmarkshellSort(30000, b) }
+func BenchmarkShellSort4(b *testing.B) { BenchmarkshellSort(40000, b) }
+func BenchmarkShellSort5(b *testing.B) { BenchmarkshellSort(50000, b) }
