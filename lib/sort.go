@@ -7,12 +7,14 @@ import (
 )
 
 func ShellSort(slice []int) []int {
+	//runtime.GOMAXPROCS(2)
 	length := len(slice)
 	var wg sync.WaitGroup
 	d := selectStepSedgewick(length)
 	//d := selectStepHibbard(length)
 	for _, step := range d {
-		if step > 5 {
+		//step == num of subarrays
+		if step < 5 { // 5 sub array can't sort async good enough because of cores num
 			wg.Add(step)
 			for i := 0; i < step; i++ {
 				go subSort(&slice, step, i, &wg)
@@ -56,7 +58,7 @@ func selectStepSedgewick(len int) (steps []int) {
 }
 
 func subSort(slice *[]int, step, position int, wg *sync.WaitGroup) {
-	if step > 5 {
+	if step < 5 {
 		defer wg.Done()
 	}
 
