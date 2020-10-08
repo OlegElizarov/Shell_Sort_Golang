@@ -52,7 +52,6 @@ func TestSelectStepSedgewick(t *testing.T) {
 func TestSelectStepHibbard(t *testing.T) {
 	length := rand.Intn(100)
 	d := selectStepHibbard(length)
-	//require.True(t, d[0]*3 < length)
 	require.Equal(t, d[(len(d))-1], 1)
 }
 
@@ -67,6 +66,7 @@ func BenchmarkshellSort(i int, b *testing.B) {
 	})
 }
 
+//func BenchmarkShellSort1(b *testing.B) { BenchmarkshellSort(1000, b) }
 func BenchmarkShellSort1(b *testing.B) { BenchmarkshellSort(10000, b) }
 func BenchmarkShellSort2(b *testing.B) { BenchmarkshellSort(20000, b) }
 func BenchmarkShellSort3(b *testing.B) { BenchmarkshellSort(30000, b) }

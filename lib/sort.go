@@ -10,12 +10,19 @@ func ShellSort(slice []int) []int {
 	length := len(slice)
 	var wg sync.WaitGroup
 	d := selectStepSedgewick(length)
+	//d := selectStepHibbard(length)
 	for _, step := range d {
-		wg.Add(step)
-		for i := 0; i < step; i++ {
-			go subSort(&slice, step, i, &wg)
+		if step > 5 {
+			wg.Add(step)
+			for i := 0; i < step; i++ {
+				go subSort(&slice, step, i, &wg)
+			}
+			wg.Wait()
+		} else {
+			for i := 0; i < step; i++ {
+				subSort(&slice, step, i, &wg)
+			}
 		}
-		wg.Wait()
 	}
 	return slice
 }
@@ -49,13 +56,31 @@ func selectStepSedgewick(len int) (steps []int) {
 }
 
 func subSort(slice *[]int, step, position int, wg *sync.WaitGroup) {
-	defer wg.Done()
+	if step > 5 {
+		defer wg.Done()
+	}
+
 	// Sort elements inside subslice
-	for j := position; j+step < len(*slice); j += step {
-		for z := position; z+step < len(*slice)-j; z += step {
-			if (*slice)[z] > (*slice)[z+step] {
-				(*slice)[z+step], (*slice)[z] = (*slice)[z], (*slice)[z+step]
-			}
+
+	//bubble
+	//for j := position; j+step < len(*slice); j += step {
+	//	for z := position; z+step < len(*slice)-j; z += step {
+	//		if (*slice)[z] > (*slice)[z+step] {
+	//			(*slice)[z+step], (*slice)[z] = (*slice)[z], (*slice)[z+step]
+	//		}
+	//	}
+	//}
+
+	//insertionSort
+	var temp int
+	var item int // previous elem index
+	for counter := position; counter < len((*slice)); counter += step {
+		temp = (*slice)[counter]
+		item = counter - step
+		for item >= 0 && (*slice)[item] > temp {
+			(*slice)[item+step] = (*slice)[item]
+			(*slice)[item] = temp
+			item -= step
 		}
 	}
 }
