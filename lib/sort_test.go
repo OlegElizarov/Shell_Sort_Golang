@@ -3,6 +3,7 @@ package lib
 import (
 	"github.com/stretchr/testify/require"
 	"math/rand"
+	"runtime"
 	"sort"
 	"testing"
 	"time"
@@ -28,34 +29,21 @@ func TestShellSort(t *testing.T) {
 	}
 }
 
-// func TestShellSort1(t *testing.T) {
-//	require.Equal(t, ShellSort(IntSliceShort), IntSliceCorrect)
-//	require.True(t, sort.IsSorted(sort.IntSlice(ShellSort(IntSliceShort))))
-//}
-//
-// func TestShellSort2(t *testing.T) {
-//	require.True(t, sort.IsSorted(sort.IntSlice(ShellSort(IntSliceBig))))
-//}
-//
-// func TestShellSort3(t *testing.T) {
-//	fmt.Println("500 numbers arr")
-//	require.Equal(t, ShellSort(IntSliceVeryBig), IntSliceVeryBigCorrect)
-//}
-
 func TestSelectStepSedgewick(t *testing.T) {
-	length := rand.Intn(100)
+	length := rand.Intn(50000)
 	d := selectStepSedgewick(length)
 	require.True(t, d[0]*3 < length)
-	require.Equal(t, d[(len(d))-1], 1)
+	require.Equal(t, 1, d[0])
 }
 
 func TestSelectStepHibbard(t *testing.T) {
 	length := rand.Intn(100)
 	d := selectStepHibbard(length)
-	require.Equal(t, d[(len(d))-1], 1)
+	require.Equal(t, 1, d[0])
 }
 
 func BenchmarkshellSort(i int, b *testing.B) {
+	runtime.GOMAXPROCS(4)
 	rand.Seed(time.Now().Unix())
 	slice := rand.Perm(i)
 	b.ResetTimer()
@@ -66,9 +54,23 @@ func BenchmarkshellSort(i int, b *testing.B) {
 	})
 }
 
+func BenchmarkstdSort(i int, b *testing.B) {
+	rand.Seed(time.Now().Unix())
+	slice := rand.Perm(i)
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			sort.Slice(slice, func(i, j int) bool {
+				return slice[i] < slice[j]
+			})
+		}
+	})
+}
+
 //func BenchmarkShellSort1(b *testing.B) { BenchmarkshellSort(1000, b) }
-func BenchmarkShellSort1(b *testing.B) { BenchmarkshellSort(10000, b) }
-func BenchmarkShellSort2(b *testing.B) { BenchmarkshellSort(20000, b) }
-func BenchmarkShellSort3(b *testing.B) { BenchmarkshellSort(30000, b) }
-func BenchmarkShellSort4(b *testing.B) { BenchmarkshellSort(40000, b) }
+//func BenchmarkShellSort1(b *testing.B) { BenchmarkshellSort(10000, b) }
+//func BenchmarkShellSort2(b *testing.B) { BenchmarkshellSort(20000, b) }
+//func BenchmarkShellSort3(b *testing.B) { BenchmarkshellSort(30000, b) }
+//func BenchmarkShellSort4(b *testing.B) { BenchmarkshellSort(40000, b) }
 func BenchmarkShellSort5(b *testing.B) { BenchmarkshellSort(50000, b) }
+func BenchmarkStdSort(b *testing.B)    { BenchmarkstdSort(50000, b) }

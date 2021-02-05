@@ -1,7 +1,6 @@
 # Shell_Sort_Golang
 Simple implementation of Shell sort in Golang
 
-
-go test -run=XXX -bench=. > 1000.txt  - save result to file
-
-awk '{ total += $5; count++ } END { print total/count }' 1000.txt find average values in file
+GET PROFILES: go test -bench=. -benchmem  -memprofile=mem -cpuprofile=cpu . <br>
+PPROF SERVER FOR MEM PROFILE: go tool pprof -alloc_objects -http=:8080 mem <br>
+PPROF TERMINAL FOR MEM PROFILE: go tool pprof -alloc_objects mem <br>

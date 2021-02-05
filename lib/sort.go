@@ -2,59 +2,71 @@ package lib
 
 import (
 	"math"
-	"sort"
 	"sync"
 )
 
+//TODO:const for choosing select func(Sedgewick/Hibbard)
+
 func ShellSort(slice []int) []int {
-	//runtime.GOMAXPROCS(2)
 	length := len(slice)
 	var wg sync.WaitGroup
 	d := selectStepSedgewick(length)
 	//d := selectStepHibbard(length)
-	for _, step := range d {
+	for ind := range d {
 		//step == num of subarrays
-		if step < 5 { // 5 sub array can't sort async good enough because of cores num
-			wg.Add(step)
-			for i := 0; i < step; i++ {
-				go subSort(&slice, step, i, &wg)
+		if d[len(d)-ind-1] < 5 { // 5 sub array can't sort async good enough because of cores num
+			wg.Add(d[len(d)-ind-1])
+			for i := 0; i < d[len(d)-ind-1]; i++ {
+				go subSort(&slice, d[len(d)-ind-1], i, &wg)
 			}
 			wg.Wait()
 		} else {
-			for i := 0; i < step; i++ {
-				subSort(&slice, step, i, &wg)
+			for i := 0; i < d[len(d)-ind-1]; i++ {
+				subSort(&slice, d[len(d)-ind-1], i, &wg)
 			}
 		}
 	}
 	return slice
 }
 
-func selectStepHibbard(len int) (steps []int) {
+func selectStepSedgewick(length int) []int {
 	var d float64
-	for i := 1; d < float64(len); i++ {
-		d = math.Pow(2, float64(i)) - 1
-		if d < float64(len) {
-			steps = append(steps, int(d))
-		}
-	}
-	sort.Sort(sort.Reverse(sort.IntSlice(steps)))
-	return
-}
-
-func selectStepSedgewick(len int) (steps []int) {
-	var d float64
-	for i := 0.0; d*3 < float64(len); i++ {
+	steps := make([]int, 10)
+	i := 0.0
+	for i = 0.0; d*3 < float64(length); i++ {
 		if int(i)%2 == 0 {
 			d = 9*(math.Pow(2.0, i)) - 9*(math.Pow(2.0, i/2)) + 1
 		} else {
 			d = 8*(math.Pow(2.0, i)) - 6*(math.Pow(2.0, (i+1)/2)) + 1
 		}
-		if d*3 < float64(len) {
-			steps = append(steps, int(d))
+		if d*3 < float64(length) {
+			if int(i) < len(steps) {
+				steps[int(i)] = int(d)
+			} else {
+				steps = append(steps, int(d))
+			}
 		}
 	}
-	sort.Sort(sort.Reverse(sort.IntSlice(steps)))
-	return
+	//steps = steps[:int(i)-1]
+	return steps
+}
+
+func selectStepHibbard(length int) []int {
+	var d float64
+	steps := make([]int, 10)
+	i := 0
+	for i = 1; d < float64(length); i++ {
+		d = math.Pow(2, float64(i)) - 1
+		if d < float64(length) {
+			if i < len(steps) {
+				steps[i-1] = int(d)
+			} else {
+				steps = append(steps, int(d))
+			}
+		}
+	}
+	//steps = steps[len(steps)-i+2:]
+	return steps
 }
 
 func subSort(slice *[]int, step, position int, wg *sync.WaitGroup) {
@@ -76,7 +88,7 @@ func subSort(slice *[]int, step, position int, wg *sync.WaitGroup) {
 	//insertionSort
 	var temp int
 	var item int // previous elem index
-	for counter := position; counter < len((*slice)); counter += step {
+	for counter := position; counter < len(*slice); counter += step {
 		temp = (*slice)[counter]
 		item = counter - step
 		for item >= 0 && (*slice)[item] > temp {
