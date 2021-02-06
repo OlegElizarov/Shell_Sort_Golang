@@ -3,7 +3,7 @@ name: Launch tests
 on:
   push:
     branches:
-      - master
+      - main
 #      - dev
 
 jobs:
