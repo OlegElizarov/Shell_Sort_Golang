@@ -70,7 +70,8 @@ func BenchmarkstdSort(i int, b *testing.B) {
 //func BenchmarkShellSort1(b *testing.B) { BenchmarkshellSort(1000, b) }
 //func BenchmarkShellSort1(b *testing.B) { BenchmarkshellSort(10000, b) }
 //func BenchmarkShellSort2(b *testing.B) { BenchmarkshellSort(20000, b) }
-//func BenchmarkShellSort3(b *testing.B) { BenchmarkshellSort(30000, b) }
+func BenchmarkShellSort3(b *testing.B) { BenchmarkshellSort(30000, b) }
+
 //func BenchmarkShellSort4(b *testing.B) { BenchmarkshellSort(40000, b) }
-func BenchmarkShellSort5(b *testing.B) { BenchmarkshellSort(50000, b) }
-func BenchmarkStdSort(b *testing.B)    { BenchmarkstdSort(50000, b) }
+//func BenchmarkShellSort5(b *testing.B) { BenchmarkshellSort(50000, b) }
+func BenchmarkStdSort(b *testing.B) { BenchmarkstdSort(30000, b) }
