@@ -1,8 +1,8 @@
 package main
 
 import (
-	"Shell_Sort_Golang/lib"
 	"fmt"
+	"github.com/OlegElizarov/Shell_Sort_Golang/lib"
 	"runtime"
 )
 

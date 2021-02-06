@@ -92,8 +92,9 @@ func subSort(slice *[]int, step, position int, wg *sync.WaitGroup) {
 		temp = (*slice)[counter]
 		item = counter - step
 		for item >= 0 && (*slice)[item] > temp {
-			(*slice)[item+step] = (*slice)[item]
-			(*slice)[item] = temp
+			//(*slice)[item+step] = (*slice)[item]
+			//(*slice)[item] = temp
+			(*slice)[item+step], (*slice)[item] = (*slice)[item], temp
 			item -= step
 		}
 	}
