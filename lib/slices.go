@@ -1,3 +1,4 @@
+//nolint:dupl,revive
 package lib
 
 var IntSliceShort = []int{11, 6, 10, 2, 16, 3, 7, 1, 15, 9, 4, 12, 5, 8, 14, 13}
