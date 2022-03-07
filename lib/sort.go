@@ -7,6 +7,7 @@ import (
 
 //TODO:const for choosing select func(Sedgewick/Hibbard)
 
+// ShellSort ...
 func ShellSort(slice []int) []int {
 	length := len(slice)
 	var wg sync.WaitGroup
@@ -32,8 +33,8 @@ func ShellSort(slice []int) []int {
 func selectStepSedgewick(length int) []int {
 	var d float64
 	steps := make([]int, 10)
-	i := 0.0
-	for i = 0.0; d*3 < float64(length); i++ {
+
+	for i := 0.0; d*3 < float64(length); i++ {
 		if int(i)%2 == 0 {
 			d = 9*(math.Pow(2.0, i)) - 9*(math.Pow(2.0, i/2)) + 1
 		} else {
@@ -54,8 +55,7 @@ func selectStepSedgewick(length int) []int {
 func selectStepHibbard(length int) []int {
 	var d float64
 	steps := make([]int, 10)
-	i := 0
-	for i = 1; d < float64(length); i++ {
+	for i := 1; d < float64(length); i++ {
 		d = math.Pow(2, float64(i)) - 1
 		if d < float64(length) {
 			if i < len(steps) {

@@ -1,12 +1,13 @@
 package lib
 
 import (
-	"github.com/stretchr/testify/require"
 	"math/rand"
 	"runtime"
 	"sort"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestShellSort(t *testing.T) {
