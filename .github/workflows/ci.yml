@@ -13,17 +13,17 @@ jobs:
       - name: Install Golang
         uses: actions/setup-go@v2
         with:
-          go-version: '1.15.x'
+          go-version: '1.17.x'
       - name: Checkout code
         uses: actions/checkout@v2
       - name: Install dependencies
         run: |
           go version
-          go get -u github.com/stretchr/testify/require
-          go get -u github.com/OlegElizarov/Shell_Sort_Golang/lib
+          go mod download
+          go mod tidy
       - name: Run build
         run: go build .
       - name: Run tests
-        run: go test -v ./lib/...
+        run: go test -v ./...
       - name: Run bench
-        run: go test -bench=. -benchmem ./lib/...
+        run: go test -bench=. -benchmem ./...
