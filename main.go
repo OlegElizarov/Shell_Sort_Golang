@@ -1,9 +1,10 @@
 package main
 
 import (
-	"Shell_Sort_Golang/lib"
 	"fmt"
 	"runtime"
+
+	"github.com/OlegElizarov/Shell_Sort_Golang/lib"
 )
 
 func main() {

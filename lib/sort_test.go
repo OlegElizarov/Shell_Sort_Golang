@@ -1,12 +1,12 @@
 package lib
 
 import (
-	"github.com/stretchr/testify/require"
-	"math/rand"
+	"math/rand/v2"
 	"runtime"
 	"sort"
 	"testing"
-	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestShellSort(t *testing.T) {
@@ -30,22 +30,22 @@ func TestShellSort(t *testing.T) {
 }
 
 func TestSelectStepSedgewick(t *testing.T) {
-	length := rand.Intn(50000)
+	length := rand.IntN(50000)
 	d := selectStepSedgewick(length)
 	require.True(t, d[0]*3 < length)
 	require.Equal(t, 1, d[0])
 }
 
 func TestSelectStepHibbard(t *testing.T) {
-	length := rand.Intn(100)
+	length := rand.IntN(100)
 	d := selectStepHibbard(length)
 	require.Equal(t, 1, d[0])
 }
 
 func BenchmarkshellSort(i int, b *testing.B) {
 	runtime.GOMAXPROCS(4)
-	rand.Seed(time.Now().Unix())
-	slice := rand.Perm(i)
+	rng := rand.New(rand.NewPCG(1, 2))
+	slice := rng.Perm(i)
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
@@ -55,8 +55,8 @@ func BenchmarkshellSort(i int, b *testing.B) {
 }
 
 func BenchmarkstdSort(i int, b *testing.B) {
-	rand.Seed(time.Now().Unix())
-	slice := rand.Perm(i)
+	rng := rand.New(rand.NewPCG(1, 2))
+	slice := rng.Perm(i)
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
