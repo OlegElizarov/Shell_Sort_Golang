@@ -3,13 +3,14 @@ package lib
 import (
 	"math/rand/v2"
 	"runtime"
-	"sort"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestShellSort(t *testing.T) {
+	t.Parallel()
 	testCases := []struct {
 		Name     string
 		Input    []int
@@ -20,16 +21,16 @@ func TestShellSort(t *testing.T) {
 		{Name: "Very big slice test", Input: IntSliceVeryBig, Expected: IntSliceVeryBigCorrect},
 	}
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.Name, func(t *testing.T) {
 			t.Parallel()
 			require.Equal(t, ShellSort(tc.Input), tc.Expected)
-			require.True(t, sort.IsSorted(sort.IntSlice(ShellSort(tc.Input))))
+			require.True(t, slices.IsSorted(ShellSort(tc.Input)))
 		})
 	}
 }
 
 func TestSelectStepSedgewick(t *testing.T) {
+	t.Parallel()
 	length := rand.IntN(50000)
 	d := selectStepSedgewick(length)
 	require.True(t, d[0]*3 < length)
@@ -37,6 +38,7 @@ func TestSelectStepSedgewick(t *testing.T) {
 }
 
 func TestSelectStepHibbard(t *testing.T) {
+	t.Parallel()
 	length := rand.IntN(100)
 	d := selectStepHibbard(length)
 	require.Equal(t, 1, d[0])
@@ -60,9 +62,7 @@ func BenchmarkstdSort(i int, b *testing.B) {
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			sort.Slice(slice, func(i, j int) bool {
-				return slice[i] < slice[j]
-			})
+			slices.Sort(slice)
 		}
 	})
 }

@@ -1,3 +1,4 @@
+// Package lib provides shell sort implementation with parallel processing.
 package lib
 
 import (
@@ -5,15 +6,16 @@ import (
 	"sync"
 )
 
-//TODO:const for choosing select func(Sedgewick/Hibbard)
+// TODO: const for choosing select func(Sedgewick/Hibbard)
 
+// ShellSort sorts the provided slice using the shell sort algorithm with parallel processing.
 func ShellSort(slice []int) []int {
 	length := len(slice)
 	var wg sync.WaitGroup
 	d := selectStepSedgewick(length)
-	//d := selectStepHibbard(length)
+	// d := selectStepHibbard(length)
 	for ind := range d {
-		//step == num of subarrays
+		// step == num of subarrays
 		if d[len(d)-ind-1] < 5 { // 5 sub array can't sort async good enough because of cores num
 			wg.Add(d[len(d)-ind-1])
 			for i := 0; i < d[len(d)-ind-1]; i++ {
@@ -47,7 +49,7 @@ func selectStepSedgewick(length int) []int {
 			}
 		}
 	}
-	//steps = steps[:int(i)-1]
+	// steps = steps[:int(i)-1]
 	return steps
 }
 
@@ -65,7 +67,7 @@ func selectStepHibbard(length int) []int {
 			}
 		}
 	}
-	//steps = steps[len(steps)-i+2:]
+	// steps = steps[len(steps)-i+2:]
 	return steps
 }
 
@@ -76,7 +78,7 @@ func subSort(slice *[]int, step, position int, wg *sync.WaitGroup) {
 
 	// Sort elements inside subslice
 
-	//bubble
+	// bubble
 	//for j := position; j+step < len(*slice); j += step {
 	//	for z := position; z+step < len(*slice)-j; z += step {
 	//		if (*slice)[z] > (*slice)[z+step] {
@@ -85,7 +87,7 @@ func subSort(slice *[]int, step, position int, wg *sync.WaitGroup) {
 	//	}
 	//}
 
-	//insertionSort
+	// insertionSort
 	var temp int
 	var item int // previous elem index
 	for counter := position; counter < len(*slice); counter += step {
