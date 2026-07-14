@@ -1,0 +1,33 @@
+# golangci-lint configuration
+# Lint configuration for Shell Sort project
+# Use: golangci-lint run --timeout=5m
+
+version: "2"
+
+# Enable specific linters for code quality control
+linters:
+  enable:
+    - errcheck       # error checking
+    - govet          # vet errors
+    - ineffassign    # unused assignments
+    - staticcheck    # static analysis
+    - unused         # unused code
+    - gocritic       # code review suggestions
+    - paralleltest   # parallel test race conditions
+    - revive         # linting rules
+    - modernize      # modernize code
+    - err113         # check errors handling expressions
+  settings:
+    govet:
+      enable:
+        - fieldalignment # struct field alignment
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck   # tests can ignore error returns
+
+# gofmt/typecheck run as formatters/built-ins in v2, not linters
+formatters:
+  enable:
+    - gofmt          # code formatting

@@ -79,13 +79,13 @@ func subSort(slice *[]int, step, position int, wg *sync.WaitGroup) {
 	// Sort elements inside subslice
 
 	// bubble
-	//for j := position; j+step < len(*slice); j += step {
-	//	for z := position; z+step < len(*slice)-j; z += step {
-	//		if (*slice)[z] > (*slice)[z+step] {
-	//			(*slice)[z+step], (*slice)[z] = (*slice)[z], (*slice)[z+step]
-	//		}
-	//	}
-	//}
+	// for j := position; j+step < len(*slice); j += step {
+	// 	for z := position; z+step < len(*slice)-j; z += step {
+	// 		if (*slice)[z] > (*slice)[z+step] {
+	// 			(*slice)[z+step], (*slice)[z] = (*slice)[z], (*slice)[z+step]
+	// 		}
+	// 	}
+	// }
 
 	// insertionSort
 	var temp int
@@ -94,8 +94,8 @@ func subSort(slice *[]int, step, position int, wg *sync.WaitGroup) {
 		temp = (*slice)[counter]
 		item = counter - step
 		for item >= 0 && (*slice)[item] > temp {
-			//(*slice)[item+step] = (*slice)[item]
-			//(*slice)[item] = temp
+			// (*slice)[item+step] = (*slice)[item]
+			// (*slice)[item] = temp
 			(*slice)[item+step], (*slice)[item] = (*slice)[item], temp
 			item -= step
 		}
