@@ -4,10 +4,16 @@ import (
 	"math/rand/v2"
 	"runtime"
 	"slices"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
+
+// benchGOMAXPROCS pins both benchmarks to the same parallelism so the
+// comparison isn't at the mercy of whatever GOMAXPROCS the environment
+// happens to default to on a given machine or CI runner.
+var benchGOMAXPROCS = runtime.NumCPU()
 
 func TestShellSort(t *testing.T) {
 	t.Parallel()
@@ -44,34 +50,56 @@ func TestSelectStepHibbard(t *testing.T) {
 	require.Equal(t, 1, d[0])
 }
 
-func BenchmarkshellSort(i int, b *testing.B) {
-	runtime.GOMAXPROCS(4)
+// benchSizes cover small, medium, and large inputs so ShellSort vs slices.Sort
+// scale comparisons are visible across the whole range, not just one point.
+var benchSizes = []int{1000, 10000, 30000}
+
+// benchInputs caches one base permutation per size so ShellSort and
+// slices.Sort benchmarks clone from the exact same underlying slice instead
+// of each generating their own copy from a matching seed — same object, not
+// just same seed replayed twice.
+var benchInputs = map[int][]int{}
+
+func benchInput(size int) []int {
+	if base, ok := benchInputs[size]; ok {
+		return base
+	}
 	rng := rand.New(rand.NewPCG(1, 2))
-	slice := rng.Perm(i)
-	b.ResetTimer()
-	b.RunParallel(func(pb *testing.PB) {
-		for pb.Next() {
-			ShellSort(slice)
-		}
-	})
+	base := rng.Perm(size)
+	benchInputs[size] = base
+	return base
 }
 
-func BenchmarkstdSort(i int, b *testing.B) {
-	rng := rand.New(rand.NewPCG(1, 2))
-	slice := rng.Perm(i)
-	b.ResetTimer()
-	b.RunParallel(func(pb *testing.PB) {
-		for pb.Next() {
-			slices.Sort(slice)
-		}
-	})
+// benchmarkSort times fn against a fresh clone of the shared base permutation
+// on every iteration. Reusing one slice across b.N iterations (the old
+// approach) would sort it once and leave every subsequent iteration timing an
+// already-sorted best case, which silently favors whichever algorithm runs
+// first and makes the two benchmarks incomparable.
+func benchmarkSort(b *testing.B, size int, fn func([]int)) {
+	b.Helper()
+	runtime.GOMAXPROCS(benchGOMAXPROCS)
+	base := benchInput(size)
+	b.ReportAllocs()
+	for b.Loop() {
+		b.StopTimer()
+		slice := slices.Clone(base)
+		b.StartTimer()
+		fn(slice)
+	}
 }
 
-// func BenchmarkShellSort1(b *testing.B) { BenchmarkshellSort(1000, b) }
-// func BenchmarkShellSort1(b *testing.B) { BenchmarkshellSort(10000, b) }
-// func BenchmarkShellSort2(b *testing.B) { BenchmarkshellSort(20000, b) }
-func BenchmarkShellSort3(b *testing.B) { BenchmarkshellSort(30000, b) }
+func BenchmarkShellSort(b *testing.B) {
+	for _, size := range benchSizes {
+		b.Run(strconv.Itoa(size), func(b *testing.B) {
+			benchmarkSort(b, size, func(s []int) { ShellSort(s) })
+		})
+	}
+}
 
-// func BenchmarkShellSort4(b *testing.B) { BenchmarkshellSort(40000, b) }
-// func BenchmarkShellSort5(b *testing.B) { BenchmarkshellSort(50000, b) }
-func BenchmarkStdSort(b *testing.B) { BenchmarkstdSort(30000, b) }
+func BenchmarkStdSort(b *testing.B) {
+	for _, size := range benchSizes {
+		b.Run(strconv.Itoa(size), func(b *testing.B) {
+			benchmarkSort(b, size, slices.Sort)
+		})
+	}
+}

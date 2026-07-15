@@ -13,7 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Run demo: `go run .`
 - Benchmark + profile: `go test -bench=. -benchmem -memprofile=mem -cpuprofile=cpu .`, then `go tool pprof -alloc_objects -http=:8080 mem` (or `go tool pprof -alloc_objects mem` for terminal)
 
-CI (`.github/workflows/ci.yml`) runs a build/vet/test matrix across Go 1.23/1.24/1.26 on ubuntu/macos/windows, plus a separate `golangci-lint` job.
+CI (`.github/workflows/ci.yml`) runs a build/vet/test matrix across Go 1.24/1.26 on ubuntu/macos/windows, plus a separate `golangci-lint` job.
 
 ## Architecture
 
