@@ -1,3 +1,4 @@
+//nolint:dupl,revive
 package lib
 
 // IntSliceShort is a short slice for testing shell sort.
