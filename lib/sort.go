@@ -32,6 +32,9 @@ func ShellSort(slice []int) []int {
 }
 
 func selectStepSedgewick(length int) []int {
+	if length <= 1 {
+		return []int{1}
+	}
 	var d float64
 	steps := make([]int, 10)
 	i := 0.0
@@ -54,6 +57,9 @@ func selectStepSedgewick(length int) []int {
 }
 
 func selectStepHibbard(length int) []int {
+	if length <= 1 {
+		return []int{1}
+	}
 	var d float64
 	steps := make([]int, 10)
 	i := 0

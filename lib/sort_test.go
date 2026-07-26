@@ -37,17 +37,49 @@ func TestShellSort(t *testing.T) {
 
 func TestSelectStepSedgewick(t *testing.T) {
 	t.Parallel()
-	length := rand.IntN(50000)
-	d := selectStepSedgewick(length)
-	require.True(t, d[0]*3 < length)
-	require.Equal(t, 1, d[0])
+	cases := []struct {
+		name   string
+		length int
+	}{
+		{name: "zero", length: 0},
+		{name: "one", length: 1},
+		{name: "small", length: 10},
+		{name: "medium", length: 500},
+		{name: "random", length: rand.IntN(50000) + 2},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			d := selectStepSedgewick(tc.length)
+			require.NotEmpty(t, d)
+			require.Equal(t, 1, d[0])
+			if tc.length > 1 {
+				require.True(t, d[0]*3 < tc.length)
+			}
+		})
+	}
 }
 
 func TestSelectStepHibbard(t *testing.T) {
 	t.Parallel()
-	length := rand.IntN(100)
-	d := selectStepHibbard(length)
-	require.Equal(t, 1, d[0])
+	cases := []struct {
+		name   string
+		length int
+	}{
+		{name: "zero", length: 0},
+		{name: "one", length: 1},
+		{name: "small", length: 10},
+		{name: "medium", length: 500},
+		{name: "random", length: rand.IntN(100) + 2},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			d := selectStepHibbard(tc.length)
+			require.NotEmpty(t, d)
+			require.Equal(t, 1, d[0])
+		})
+	}
 }
 
 // benchSizes cover small, medium, and large inputs so ShellSort vs slices.Sort
