@@ -1,3 +1,4 @@
+// Package lib provides shell sort implementation with parallel processing.
 package lib
 
 import (
@@ -5,16 +6,16 @@ import (
 	"sync"
 )
 
-//TODO:const for choosing select func(Sedgewick/Hibbard)
+// TODO: const for choosing select func(Sedgewick/Hibbard)
 
-// ShellSort ...
+// ShellSort sorts the provided slice using the shell sort algorithm with parallel processing.
 func ShellSort(slice []int) []int {
 	length := len(slice)
 	var wg sync.WaitGroup
 	d := selectStepSedgewick(length)
-	//d := selectStepHibbard(length)
+	// d := selectStepHibbard(length)
 	for ind := range d {
-		//step == num of subarrays
+		// step == num of subarrays
 		if d[len(d)-ind-1] < 5 { // 5 sub array can't sort async good enough because of cores num
 			wg.Add(d[len(d)-ind-1])
 			for i := 0; i < d[len(d)-ind-1]; i++ {
@@ -31,10 +32,13 @@ func ShellSort(slice []int) []int {
 }
 
 func selectStepSedgewick(length int) []int {
+	if length <= 1 {
+		return []int{1}
+	}
 	var d float64
 	steps := make([]int, 10)
-
-	for i := 0.0; d*3 < float64(length); i++ {
+	i := 0.0
+	for i = 0.0; d*3 < float64(length); i++ {
 		if int(i)%2 == 0 {
 			d = 9*(math.Pow(2.0, i)) - 9*(math.Pow(2.0, i/2)) + 1
 		} else {
@@ -48,14 +52,18 @@ func selectStepSedgewick(length int) []int {
 			}
 		}
 	}
-	//steps = steps[:int(i)-1]
+	// steps = steps[:int(i)-1]
 	return steps
 }
 
 func selectStepHibbard(length int) []int {
+	if length <= 1 {
+		return []int{1}
+	}
 	var d float64
 	steps := make([]int, 10)
-	for i := 1; d < float64(length); i++ {
+	i := 0
+	for i = 1; d < float64(length); i++ {
 		d = math.Pow(2, float64(i)) - 1
 		if d < float64(length) {
 			if i < len(steps) {
@@ -65,7 +73,7 @@ func selectStepHibbard(length int) []int {
 			}
 		}
 	}
-	//steps = steps[len(steps)-i+2:]
+	// steps = steps[len(steps)-i+2:]
 	return steps
 }
 
@@ -76,24 +84,24 @@ func subSort(slice *[]int, step, position int, wg *sync.WaitGroup) {
 
 	// Sort elements inside subslice
 
-	//bubble
-	//for j := position; j+step < len(*slice); j += step {
-	//	for z := position; z+step < len(*slice)-j; z += step {
-	//		if (*slice)[z] > (*slice)[z+step] {
-	//			(*slice)[z+step], (*slice)[z] = (*slice)[z], (*slice)[z+step]
-	//		}
-	//	}
-	//}
+	// bubble
+	// for j := position; j+step < len(*slice); j += step {
+	// 	for z := position; z+step < len(*slice)-j; z += step {
+	// 		if (*slice)[z] > (*slice)[z+step] {
+	// 			(*slice)[z+step], (*slice)[z] = (*slice)[z], (*slice)[z+step]
+	// 		}
+	// 	}
+	// }
 
-	//insertionSort
+	// insertionSort
 	var temp int
 	var item int // previous elem index
 	for counter := position; counter < len(*slice); counter += step {
 		temp = (*slice)[counter]
 		item = counter - step
 		for item >= 0 && (*slice)[item] > temp {
-			//(*slice)[item+step] = (*slice)[item]
-			//(*slice)[item] = temp
+			// (*slice)[item+step] = (*slice)[item]
+			// (*slice)[item] = temp
 			(*slice)[item+step], (*slice)[item] = (*slice)[item], temp
 			item -= step
 		}

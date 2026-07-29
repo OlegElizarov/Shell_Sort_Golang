@@ -1,3 +1,4 @@
+// Package main demonstrates shell sort algorithm with parallel processing.
 package main
 
 import (
