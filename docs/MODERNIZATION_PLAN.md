@@ -14,6 +14,7 @@ Written 2026-07-14. Revised 2026-08-03 to fold in [GAP_SEQUENCES.md](GAP_SEQUENC
 | 1 | [Gap catalog, in place](#phase-1--gap-catalog-in-place) | 8 | ✅ done | catalog compiles |
 | 2 | [Contract + golden-terms tests](#phase-2--contract--golden-terms-tests) | 8 | ✅ done | 18 sequences pass contract |
 | 3 | [Counting harness + literature validation](#phase-3--counting-harness--literature-validation) | 7 | ✅ done | **4 published counts reproduce** |
+| 3.1 | [Parked nits and small fixes](#phase-31--parked-nits-and-small-fixes) | 2 | 🅿️ backlog | absorbed by later phases |
 | 4 | [Options API + generics](#phase-4--options-api--generics) | 8 | ⬜ not started | old call sites still compile |
 | 5 | [Test rebuild](#phase-5--test-rebuild) | 6 | ⬜ not started | oracle-based, race-clean |
 | 6 | [Benchmark matrix](#phase-6--benchmark-matrix) | 8 | ⬜ not started | `docs/BENCHMARKS.md` exists |
@@ -21,7 +22,7 @@ Written 2026-07-14. Revised 2026-08-03 to fold in [GAP_SEQUENCES.md](GAP_SEQUENC
 | 8 | [Restructure to root package](#phase-8--restructure-to-root-package) | 6 | ⬜ not started | pure moves, tests unchanged |
 | 9 | [Docs](#phase-9--docs) | 4 | ⬜ not started | `gopls check` clean |
 
-Status legend: ⬜ not started · 🟨 in progress · ✅ done · ⛔ blocked
+Status legend: ⬜ not started · 🟨 in progress · ✅ done · ⛔ blocked · 🅿️ backlog (not gating; drained by the phase that names it)
 
 **Updating this file is part of each phase.** Tick the boxes as you go, flip the row's status, and redraw the bar (`▰` per complete phase). One commit per phase, message given in the phase header.
 
@@ -181,6 +182,55 @@ New file `lib/gaps_test.go`. This is where the catalog becomes trustworthy — d
 **Gate:** ✅ passed. Seven of eight reproduce within 0.27%; the eighth is a published-table discrepancy, argued above and documented at `lib/gaps_bench_test.go`'s `prattMeasuredEX`, not a catalog bug.
 
 > Phases 1–3 are worth doing even if the rest is deferred: they turn the literature survey into executable, verified code.
+
+---
+
+## Phase 3.1 — Parked nits and small fixes
+
+**Not a gate, and not sequenced here.** This is the backlog for small improvements raised mid-flight. Each item names the phase that should absorb it, so nothing gets done twice or done too early — landing them where the surrounding code is already being edited keeps the diffs attributable.
+
+### 3.1.1 — Numeric sequence identity instead of a bare `Name` string
+
+**Absorb into:** Phase 4 (it changes the public type) · **Status:** ⬜ open
+
+Give each catalog entry a generated enum identity rather than carrying a `string` as its only handle:
+
+```go
+//go:generate stringer -type=SequenceID
+type SequenceID uint8
+
+const (
+    TokudaID SequenceID = iota
+    CiuraID
+    // …
+)
+```
+
+The honest case for it, strongest first:
+
+1. **`GapSequence` is not comparable today.** It has a `func` field, so `==`, map keys and `slices.Contains` are all unavailable — the reason `TestGapSequenceGoldenTerms` matches cases to the catalog by position and a length assertion rather than by identity. A `SequenceID` is comparable, map-keyable and sortable, which is what a registry, a CLI flag, or a `BENCHMARKS.md` result table each want.
+2. **Exhaustiveness.** With an enum, `go vet`/`exhaustive` can flag a catalog entry that was added but never registered. Right now that is caught only by the hand-written `require.Len(cases, len(allSequences))` guard.
+3. **`stringer` gives the label back for free**, so the struct can drop `Name` and shrink — which also removes the `fieldalignment` workaround noted in Phase 1.
+
+**On the performance argument specifically:** numeric comparison does beat string comparison, but it is worth being precise about where that would pay. There is no string comparison on the sorting path today — `WithGapSequence` will take a `GapSequence` value, and `Name` is only read when a test or benchmark formats a label. So the win is *structural* (comparability, exhaustiveness, registry lookups) rather than measurable in `ns/op`. If a future API does dispatch by name — a `--gap-sequence=tokuda` flag, a `map[string]GapSequence` lookup per call — then the numeric form becomes a real cost argument too, and an `O(1)` array index by ID beats a map hash either way.
+
+**Cost:** a generated `sequenceid_string.go` plus a `stringer` dependency (`golang.org/x/tools/cmd/stringer`) in the toolchain, and CI needs `go generate` output checked in or verified.
+
+### 3.1.2 — Retrospective: measured improvement per phase
+
+**Absorb into:** Phase 6 (build it) and Phase 7 (first real entry) · **Status:** ⬜ open
+
+Track what each phase actually bought, rather than only reporting the final number. `docs/bench-baseline.txt` from Phase 0 is the first data point; the intent is a performance changelog that answers "which change earned the speedup".
+
+Shape:
+
+- One recorded artifact per phase that can move performance — `docs/bench-phase{N}.txt` — produced the same way every time (same `-count`, same machine, same `GOMAXPROCS`), so `benchstat docs/bench-baseline.txt docs/bench-phase7.txt` is always valid.
+- A `make bench-record PHASE=n` target so the recording procedure is not retyped and cannot drift.
+- A cumulative table at the top of `docs/BENCHMARKS.md`: phase, commit, what changed, sec/op at each size, delta vs the previous phase, delta vs baseline, and delta vs `slices.Sort` — the last column being the one that says whether the library is worth using at all.
+
+**The measurement caveat this has to respect:** Phase 0 recorded ±13–24% variance on `ShellSort` on this machine, so a phase-to-phase delta smaller than roughly 25% is not distinguishable from noise at `-count=10`. Either raise `-count` substantially for recorded runs or report benchstat's p-value alongside each delta and treat anything above 0.05 as "no measured change". A retrospective table that presents noise as progress is worse than no table.
+
+### 3.1.3 — *(awaiting the third item)*
 
 ---
 
