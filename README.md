@@ -39,6 +39,8 @@ go tool pprof -alloc_objects -http=:8080 mem
 - **Sedgewick** (active) — `selectStepSedgewick`
 - **Hibbard** (alternative) — `selectStepHibbard`, swap in `lib/sort.go`
 
+See [docs/GAP_SEQUENCES.md](docs/GAP_SEQUENCES.md) for analysis of the other sequences — formulae, complexity bounds, and fit with the parallel design.
+
 ## Structure
 
 ```
