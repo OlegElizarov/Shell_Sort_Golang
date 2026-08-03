@@ -21,6 +21,23 @@ Two properties do the theoretical work:
 
 `t(N)` = number of passes = number of gaps below `N`. For a sequence with asymptotic ratio `r = h_{k+1}/h_k`, `t(N) ≈ log_r N`.
 
+### Symbols used in the measurement tables
+
+Every symbol that appears in a results table in this document or in `docs/BENCHMARKS.md`, spelled out once:
+
+| Symbol | Reads as | What it actually counts |
+| --- | --- | --- |
+| `N` | input size | How many elements are being sorted. Results are always quoted at a stated `N`, because every sequence's ranking depends on it. |
+| **CO** | comparisons | One evaluation of "is `A(i)` greater than `A(i+h)`?" — one question the algorithm asks about two elements. Includes the question that comes back "no" and ends the inner loop. |
+| **EX** | exchanges | One swap that fixes one inversion, i.e. one pair of elements put back in the right order relative to each other. |
+| **μ** | mean (the Greek letter mu) | An average over many runs. `μCO` is therefore "average number of comparisons", and `μEX` is "average number of exchanges" — averaged over some number of randomly shuffled inputs, because a single input's count depends on how unlucky that particular shuffle was. |
+| **trials** | — | How many random shuffles were averaged to get a `μ`. More trials, steadier average. |
+| **Δ** | delta, i.e. difference | How far a measured number sits from the one it is being checked against, in percent. `−0.048%` means the measured value is 0.048% *below* the published one. |
+
+Why these two metrics and not just "speed": comparisons and exchanges are **implementation-independent**. Two correct Shellsorts using the same gap sequence perform the same number of comparisons on the same input, whether written in Python or Go, on any machine, at any clock speed. That makes them the only numbers that can be checked against a published paper. Wall-clock time is *not* comparable that way — it belongs in `docs/BENCHMARKS.md`, measured here, on this machine.
+
+The two also disagree about which sequence is best, which is a finding rather than a nuisance: a sequence can ask fewer questions but do more moving, or the reverse. §5.1 shows exactly that.
+
 ## 2. Metrics scored
 
 Each sequence below is judged on the same axes:
@@ -215,7 +232,11 @@ Wall-clock, `N = 1000`, single-threaded Python: Ciura-1000 and Ours-A1000-Time b
 
 ### Reproduced in this repo
 
-`TestOperationCountsMatchLiterature` (`lib/gaps_bench_test.go`) re-measures the four sequences above at `N = 10 000`, mean over 200 seeded random permutations, counting a comparison as one evaluation of `A(i) > A(i+k)` and an exchange as one swap fixing an inversion — Skean et al.'s definitions:
+**What this section is for.** The gap sequences in `lib/gaps.go` were written from formulas in papers. A formula can be transcribed slightly wrong and still produce a sequence that looks entirely reasonable — ascending, starting at 1, growing at about the right rate — and still be the wrong sequence. Ordinary tests cannot catch that, because there is nothing to compare against except the formula that was already transcribed.
+
+So instead: run our sorting code, count the operations it performs, and check those counts against counts published in a paper. If our generated gaps differ from the paper's, the counts come out different. If they match, the gaps match. It is an indirect check with a very sharp edge — comparison counts run into the hundreds of thousands, and agreeing on one to four decimal places by accident is not plausible.
+
+**How it was run.** `TestOperationCountsMatchLiterature` (`lib/gaps_bench_test.go`) sorts 200 randomly shuffled arrays of 10 000 elements with each sequence, counts comparisons and exchanges (defined in §1) on every one, and averages. The averages are compared against Skean et al.'s published Tables 3–5. "Δ" is how far our average lands from theirs, in percent; anything under a couple of percent is agreement.
 
 | Sequence | μCO measured | μCO published | Δ | μEX measured | μEX published | Δ |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -224,11 +245,23 @@ Wall-clock, `N = 1000`, single-threaded Python: Ciura-1000 and Ours-A1000-Time b
 | Pratt-23 | 604 438 | 604 502 | −0.011% | **63 705** | **66 923** | **−4.81%** |
 | Pratt-25 | 449 982 | 450 131 | −0.033% | 62 357 | 62 191 | +0.267% |
 
-Seven of the eight figures land within 0.27%, which validates the gap generators, the counter, and the definitions in one shot.
+Seven of the eight numbers land within 0.27% of the published ones. That is a strong result: the gap generators, the operation counter, and our reading of Skean et al.'s definitions are all confirmed correct in one shot.
 
-**The eighth — Pratt-23's exchange count — does not reproduce, and the evidence points at the published cell rather than at this catalog.** Pratt-23's *comparison* count reproduces to 0.011%, and comparisons depend on every one of the 67 gaps the sequence generates at this size; a wrong gap set cannot match those to four decimal places while missing only exchanges. Capping the generator at `N/2`, `N/3` or `N/4` moves the exchange count toward 66 923 but wrecks the comparison agreement (580 166, 553 377, 534 384 against a published 604 502), so no single gap set reproduces both published figures. Pratt-25, generated by the same code with a different base, reproduces both. The measured 63 705 is asserted instead, at the same tolerance, so the check still guards against regressions.
+#### The eighth number, explained
 
-Two consequences for §5.1's conclusions. Point 2's comparison/exchange tradeoff **holds and gets slightly stronger** — Pratt-23 at 63 705 exchanges is 65% of Tokuda's, not 68%. Point 3 is unaffected, being about wall-clock.
+One cell disagrees: Pratt-23's exchange count. We measure 63 705 where the paper prints 66 923 — ours is 4.81% lower.
+
+The obvious suspect is our own code, and that was the working assumption. Three checks say otherwise:
+
+1. **The same sequence's comparison count is right.** Pratt-23's comparisons match to 0.011% — 604 438 against a published 604 502, a difference of 64 out of 604 502. Comparisons depend on *every* gap the sequence produces (67 of them at this size), so if our list of gaps were wrong that number could not land that close. The gaps are right.
+
+2. **No other gap list explains their pair of numbers.** If the paper had built its Pratt gaps with a different cutoff, *both* of its numbers would shift together. That was tested directly: stopping the sequence at `N/2`, `N/3` or `N/4` does push exchanges up toward 66 923 — but it drags comparisons down to 580 166, 553 377 and 534 384, destroying the match with their 604 502. No cutoff reproduces both published numbers at once, meaning their two numbers cannot both come from one gap sequence.
+
+3. **The neighbouring sequence reproduces perfectly.** Pratt-25 runs through the identical code with one constant changed (5 instead of 3), and both its numbers match (+0.033% and +0.267%). Same counter, same generator — so neither has a systematic fault.
+
+Conclusion: the disagreement is in that one published cell, not in this catalog. The test still asserts a value there — our measured 63 705, at the same tolerance — so if the Pratt generator is ever changed in a way that moves this number, the test fails and says so. It simply stops pretending the published number is the one to match.
+
+**Effect on the conclusions below:** point 2, the comparison/exchange tradeoff, **holds and gets slightly stronger** — Pratt-23 uses 65% of Tokuda's exchanges rather than 68%. Point 3 concerns wall-clock time and is unaffected.
 
 Four things this table settles:
 

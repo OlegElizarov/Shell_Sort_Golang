@@ -14,7 +14,7 @@ Written 2026-07-14. Revised 2026-08-03 to fold in [GAP_SEQUENCES.md](GAP_SEQUENC
 | 1 | [Gap catalog, in place](#phase-1--gap-catalog-in-place) | 8 | ✅ done | catalog compiles |
 | 2 | [Contract + golden-terms tests](#phase-2--contract--golden-terms-tests) | 8 | ✅ done | 18 sequences pass contract |
 | 3 | [Counting harness + literature validation](#phase-3--counting-harness--literature-validation) | 7 | ✅ done | **4 published counts reproduce** |
-| 3.1 | [Parked nits and small fixes](#phase-31--parked-nits-and-small-fixes) | 2 | 🅿️ backlog | absorbed by later phases |
+| 3.1 | [Parked nits and small fixes](#phase-31--parked-nits-and-small-fixes) | 3 | 🅿️ backlog | absorbed by later phases |
 | 4 | [Options API + generics](#phase-4--options-api--generics) | 8 | ⬜ not started | old call sites still compile |
 | 5 | [Test rebuild](#phase-5--test-rebuild) | 6 | ⬜ not started | oracle-based, race-clean |
 | 6 | [Benchmark matrix](#phase-6--benchmark-matrix) | 8 | ⬜ not started | `docs/BENCHMARKS.md` exists |
@@ -151,6 +151,18 @@ New file `lib/gaps_test.go`. This is where the catalog becomes trustworthy — d
 
 **The gate on the whole catalog.** Cheapest correctness check available for Phase 1's 18 generators. Do not proceed past a mismatch.
 
+**What this phase does, in plain terms.** The 18 gap sequences were written from formulas in papers. A mistranscribed formula still produces a plausible-looking sequence — ascending, starting at 1, growing at roughly the right rate — so no ordinary test catches it; there is nothing to check against except the formula that was already copied wrong. The way around that: sort a lot of arrays, count the operations performed, and compare those counts to counts printed in a paper. Different gaps produce different counts, so matching counts means matching gaps.
+
+**Vocabulary** (full glossary in [GAP_SEQUENCES.md §1](GAP_SEQUENCES.md)):
+
+- **comparison** — one evaluation of "is this element bigger than that one?", including the one that comes back "no" and ends the loop.
+- **exchange** — one swap that fixes one out-of-order pair.
+- **μCO / μEX** — the *mean* (μ, the Greek letter mu) number of comparisons / exchanges, averaged over many randomly shuffled inputs. Averaged because any single input's count depends on how that particular shuffle happened to land.
+- **Δ** — how far a measured number is from the published one, in percent. Negative means below.
+- **`N`** — how many elements are being sorted; here always 10 000.
+
+Comparisons and exchanges are used rather than elapsed time because they are **implementation-independent**: any correct Shellsort with the same gaps performs the same number of comparisons on the same input, in any language, on any machine. That is what makes checking against someone else's published table meaningful. Wall-clock time is not comparable that way, and belongs to Phase 6.
+
 - [x] Add unexported `sortInstrumented` in `lib/gaps_bench_test.go` mirroring `subSort` with two counters — test files are excluded from the shipped package, so instrumentation never touches the production path
 - [x] Match Skean et al.'s definitions exactly or the numbers aren't comparable: a **comparison** is one evaluation of `A(i) > A(i+k)`; an **exchange** is one swap performed to fix an inversion
 - [x] The current `subSort` uses a *shifting* insertion sort — decide explicitly whether a shift counts as an exchange, and record the choice in a comment next to the counter
@@ -175,7 +187,13 @@ New file `lib/gaps_test.go`. This is where the catalog becomes trustworthy — d
       | Pratt-23 | 604 438 | −0.011% | **63 705** | **−4.81%** |
       | Pratt-25 | 449 982 | −0.033% | 62 357 | +0.267% |
 
-      The one miss is Pratt-23's exchange count, and the rule above was applied rather than waived — the deviation was investigated, and the evidence exonerates the catalog. Pratt-23's *comparisons* reproduce to 0.011%, and comparisons depend on every one of the 67 gaps generated at this size, so a wrong gap set cannot match them to four decimals while missing only exchanges. Capping the generator at `N/2`, `N/3` or `N/4` moves exchanges toward 66 923 but destroys the comparison agreement (580 166 / 553 377 / 534 384 vs 604 502), so no single gap set produces both published figures. Pratt-25 runs the identical code path with a different base and reproduces both. The test asserts the measured 63 705 at the same tolerance, so it still guards regressions.
+      **The one miss, explained.** Pratt-23's exchange count came out 4.81% below the published figure — 63 705 against 66 923. The rule above ("disagreement means a bug in the catalog") was applied rather than waived: the deviation was investigated on the assumption our code was wrong. Three checks say it is not.
+
+      1. *The same sequence's comparison count is right* — 604 438 vs a published 604 502, off by 64. Comparisons depend on all 67 gaps the sequence generates at this size, so a wrong gap list could not land that close. The gaps are correct.
+      2. *No other gap list explains their pair of numbers.* A different cutoff in the paper would move both of its numbers together. Tested directly: stopping at `N/2`, `N/3` or `N/4` pushes exchanges toward 66 923 but drags comparisons down to 580 166 / 553 377 / 534 384, ruining the match with 604 502. No cutoff reproduces both published numbers at once — so those two numbers cannot both have come from one sequence.
+      3. *The neighbouring sequence reproduces perfectly.* Pratt-25 is the same code with one constant changed, and both its numbers match (+0.033%, +0.267%) — clearing the counter and the generator of any systematic fault.
+
+      So the disagreement sits in that one published cell. The test still asserts a number there — our measured 63 705, at the same tolerance — so a future change to the Pratt generator that moves it will still fail the test.
 - [x] Record the reproduced numbers next to the published ones in GAP_SEQUENCES.md §5.1
 - [x] `TestCountingSortSorts` (**added, not in the original plan**) — the counts only mean something if the mirrored algorithm sorts, so the harness is checked against a `slices.Sort` oracle across all 18 sequences
 
@@ -230,7 +248,25 @@ Shape:
 
 **The measurement caveat this has to respect:** Phase 0 recorded ±13–24% variance on `ShellSort` on this machine, so a phase-to-phase delta smaller than roughly 25% is not distinguishable from noise at `-count=10`. Either raise `-count` substantially for recorded runs or report benchstat's p-value alongside each delta and treat anything above 0.05 as "no measured change". A retrospective table that presents noise as progress is worse than no table.
 
-### 3.1.3 — *(awaiting the third item)*
+### 3.1.3 — Define the notation; explain the reasoning, not just the result
+
+**Absorb into:** applied to Phase 3 immediately; standing rule for Phases 6, 7 and 9 · **Status:** ✅ done for Phase 3, standing thereafter
+
+Phase 3's write-up was unreadable without already knowing the field — symbols like `μCO`, `μEX` and `Δ` were used unexplained, and the argument about the Pratt deviation was compressed into one dense paragraph. Measurement sections are the parts of this repo most likely to be read by someone who did not write them, which makes that the wrong place to be terse.
+
+Fixed for Phase 3:
+
+- [GAP_SEQUENCES.md §1](GAP_SEQUENCES.md) gained a **symbol table** — `N`, CO, EX, μ, trials, Δ — each spelled out in words, plus why comparisons and exchanges are the metrics that can be checked against a paper at all (they are implementation-independent; wall-clock is not).
+- §5.1's reproduction section now opens with *why* the check exists — a mistranscribed formula produces a plausible-looking sequence that no ordinary test can catch — before any numbers appear.
+- The Pratt deviation is now three numbered checks in plain language instead of one dense paragraph.
+- Phase 3 above gained the same framing and a short vocabulary list.
+
+**Standing rule for the phases that produce numbers:**
+
+1. Spell out any symbol at first use, or link to the glossary. `μ` means mean; do not assume it.
+2. State what is being measured and why *before* showing the measurement.
+3. When a number disagrees with an expectation, show the reasoning that led to the verdict — what was suspected, what was tested, what it ruled out. A conclusion with no visible reasoning cannot be checked by a reader, which makes it worth very little.
+4. Say plainly when a difference is too small to mean anything (see 3.1.2's variance caveat) rather than reporting it as a result.
 
 ---
 
