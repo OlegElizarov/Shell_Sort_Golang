@@ -86,7 +86,7 @@ Nothing to build; capture the "before" so later phases are attributable.
       3. **`StdSort/1000` at ±46% is a harness artifact, not the sort.** At 55 µs/op the per-iteration `b.StopTimer()`/`b.StartTimer()` toggle in `benchmarkSort` (`lib/sort_test.go:116-118`) is a large fraction of the measurement — the exact defect Phase 6's measurement-hygiene task removes.
 
       Allocations come from the gap slice plus goroutine machinery; the jump 4→5 at 30 000 is one extra gap.
-- [x] `lib.test` (6.9 MB stale binary at repo root) and `coverage.out` gitignored — both covered by `.gitignore` `*.test` / `*.out`; untracked files still on disk
+- [x] `lib.test` (6.9 MB stale binary at repo root) and `coverage.out` — deleted from disk, and covered going forward by `.gitignore` `*.test` / `*.out`
 
 **Gate:** tree builds, tests pass, baseline benchmark file exists.
 
