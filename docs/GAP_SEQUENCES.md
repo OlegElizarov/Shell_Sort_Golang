@@ -1,8 +1,10 @@
 # Shellsort Gap Sequences: Analysis Beyond Sedgewick and Hibbard
 
-Literature survey. No benchmarks were run for this document — every number here is either a proven bound or a published measurement, attributed as such.
+Literature survey. Every number here is a proven bound or a published measurement, attributed as such — with one clearly marked exception: [§5.1's "Reproduced in this repo"](#reproduced-in-this-repo), where operation counts measured against this implementation are shown next to the published ones they check. No wall-clock timings were produced for this document; those belong to the benchmark study (Phase 6 of [MODERNIZATION_PLAN.md](MODERNIZATION_PLAN.md)).
 
-`lib/sort.go` currently ships two gap sequences: `selectStepSedgewick` (active) and `selectStepHibbard` (commented out). This document surveys everything else, so that making the gap function pluggable (see `docs/MODERNIZATION_PLAN.md` §A, `WithGapSequence`) becomes a decision with evidence behind it. Sedgewick and Hibbard appear only as baselines in the comparison table.
+When this survey was written, `lib/sort.go` shipped two gap sequences: `selectStepSedgewick` (active) and `selectStepHibbard` (commented out). It surveys everything else, so that making the gap function pluggable (`WithGapSequence`, Phase 4 of [MODERNIZATION_PLAN.md](MODERNIZATION_PLAN.md)) is a decision with evidence behind it. Sedgewick and Hibbard appear only as baselines in the comparison table.
+
+**Since then**, Phases 1–3 of that plan turned this survey into code: all 18 sequences below live in `lib/gaps.go` as `GapSequence` values, `selectStepHibbard` is gone (replaced by the catalog's `Hibbard`), and §5.1's published operation counts have been reproduced against the implementation. `selectStepSedgewick` is still the one the sorter uses until Phase 4 wires the catalog in.
 
 ## 1. Notation
 
@@ -57,7 +59,7 @@ Compare Hibbard's `2^k − 1`: consecutive gaps like 7 and 15 are coprime, the l
 
 ### Symbols used in the measurement tables
 
-Every symbol that appears in a results table in this document or in `docs/BENCHMARKS.md`, spelled out once:
+Every symbol that appears in a results table in this document, spelled out once:
 
 | Symbol | Reads as | What it actually counts |
 | --- | --- | --- |
@@ -68,7 +70,7 @@ Every symbol that appears in a results table in this document or in `docs/BENCHM
 | **trials** | — | How many random shuffles were averaged to get a `μ`. More trials, steadier average. |
 | **Δ** | delta, i.e. difference | How far a measured number sits from the one it is being checked against, in percent. `−0.048%` means the measured value is 0.048% *below* the published one. |
 
-Why these two metrics and not just "speed": comparisons and exchanges are **implementation-independent**. Two correct Shellsorts using the same gap sequence perform the same number of comparisons on the same input, whether written in Python or Go, on any machine, at any clock speed. That makes them the only numbers that can be checked against a published paper. Wall-clock time is *not* comparable that way — it belongs in `docs/BENCHMARKS.md`, measured here, on this machine.
+Why these two metrics and not just "speed": comparisons and exchanges are **implementation-independent**. Two correct Shellsorts using the same gap sequence perform the same number of comparisons on the same input, whether written in Python or Go, on any machine, at any clock speed. That makes them the only numbers that can be checked against a published paper. Wall-clock time is *not* comparable that way: it has to be measured here, on this machine, which is the job of the benchmark study planned as Phase 6 of [MODERNIZATION_PLAN.md](MODERNIZATION_PLAN.md) (it will land in `docs/BENCHMARKS.md`, which does not exist yet).
 
 The two also disagree about which sequence is best, which is a finding rather than a nuisance: a sequence can ask fewer questions but do more moving, or the reverse. §5.1 shows exactly that.
 
@@ -86,7 +88,7 @@ Each sequence below is judged on the same axes:
 | **Average case** | Almost always empirical. Flagged explicitly when it is a measurement, not a theorem. |
 | **Adaptivity** | Behaviour on sorted / reverse-sorted / nearly-sorted input. |
 | **Locality** | Large gaps stride past cache lines: one miss per access. Small gaps are sequential. Fraction of work spent in small-gap passes is a cache-cost proxy. |
-| **Gap-table cost** | Memory + arithmetic to produce the gaps. Relevant to `make([]int, 10)` pre-sizing at `lib/sort.go:39`. |
+| **Gap-table cost** | Memory + arithmetic to produce the gaps. Motivated by the `make([]int, 10)` pre-sizing then at `lib/sort.go:39`, which padded short sequences with trailing zeros; the `lib/gaps.go` generators are `append`-only and no longer have that failure mode. |
 | **Parallel width / span / barriers** | See §5. |
 
 Not applicable to any sequence: **stability** (Shellsort is unstable for every gap sequence, because long-range swaps reorder equal keys) and **extra memory** (all variants are in-place, `O(t)` for the gap slice).
@@ -333,7 +335,7 @@ Secondary notes:
 
 ## 7. Recommendation
 
-For `WithGapSequence` (`docs/MODERNIZATION_PLAN.md` §A):
+For `WithGapSequence` (Phase 4 of [MODERNIZATION_PLAN.md](MODERNIZATION_PLAN.md)):
 
 1. **Tokuda 1992 as the default.** Closed form, unbounded, ~17 passes at `10^6`, worst case boxed in between `Ω(N^{1.26})` and `O(N^{4/3})`, and — per §5.1 — statistically tied with every Ciura variant on comparisons at `N = 10^4` while beating all of them on **exchanges** (98 071 vs 101 680–111 338). It also has the largest first gap of the strong candidates, which matters most for the parallel structure. The measured data strengthens this choice rather than merely permitting it.
 2. **Ciura-Large as an opt-in** for inputs in the low thousands, where his search actually applies, with two caveats documented: the sequence in common use is his *conjectured* variant, and the `⌊2.25h⌋` extension past 1750 is unvalidated.
@@ -342,7 +344,9 @@ For `WithGapSequence` (`docs/MODERNIZATION_PLAN.md` §A):
 5. **Pratt as documentation only — with one exception.** Best worst-case bound in the literature, worst practical constant (3.1× Tokuda's comparisons at `N = 10^4`), ~125 barriers here. But it is the **exchange-minimizing** family by a wide margin (§5.1), so if a consumer's cost model is dominated by writes rather than comparisons, Pratt-25 (`2^p·5^q`) is the right answer and worth exposing for that case alone.
 6. **Do not add** Shell, Frank–Lazarus, Papernov–Stasevich (dominated), or Gonnet–Baeza-Yates (`Θ(N²)` for some `N`).
 
-Retain Sedgewick 1986 and Hibbard for continuity, as `MODERNIZATION_PLAN.md` already assumes.
+Retain Sedgewick 1986 and Hibbard for continuity, as `MODERNIZATION_PLAN.md` already assumes — both now exist as `Sedgewick86` and `Hibbard` in `lib/gaps.go`.
+
+**One divergence from the "do not add" list above, deliberate.** The catalog does ship Shell, Frank–Lazarus, Papernov–Stasevich and Gonnet–Baeza-Yates, which point 6 argues against. That advice is about what to *recommend* as a default; the benchmark study needs a floor to measure the good sequences against, and Shell and Gonnet–Baeza-Yates are the only two that produce genuinely bad gap sets. They are documented as controls in their doc comments and recommended nowhere.
 
 Open question worth measuring rather than reasoning about, per Skean et al.: whether the comparison-optimal sequence is also the runtime-optimal one under this parallel scheme. It probably is not, and the answer is size-dependent — which is the case for keeping the sequence a public option instead of a constant.
 
