@@ -17,9 +17,43 @@ Correctness requires only `h_1 = 1` (the final pass is a plain insertion sort). 
 Two properties do the theoretical work:
 
 - **`h`-sortedness is preserved** by later passes with smaller gaps. Work is never undone.
-- If an array is already `k`-sorted and `l`-sorted, an `h`-pass costs `O(N)` when `h` is representable as a non-negative combination `ak + bl` for all large enough offsets (the Frobenius / coin-problem argument). This is exactly why Pratt's sequence is fast and why gaps sharing common factors are slow.
+- Passes **inherit** work from earlier passes, but only when the gaps are arithmetically compatible. This is the whole ballgame, and it is worked out in §1.1.
 
 `t(N)` = number of passes = number of gaps below `N`. For a sequence with asymptotic ratio `r = h_{k+1}/h_k`, `t(N) ≈ log_r N`.
+
+### 1.1 Why gap arithmetic decides everything
+
+The single mechanism behind every good and every bad sequence in this document.
+
+**Setup.** Say the array is already `k`-sorted and `l`-sorted — two earlier passes, with gaps `k` and `l`, have finished. Now a pass with gap `h` begins. How much work is left for it?
+
+**The chain argument.** Suppose `h` can be written as `h = a·k + b·l` with `a, b` non-negative integers — `a` hops of size `k` plus `b` hops of size `l` land you exactly `h` positions along. Because the array is `k`-sorted, every `k`-hop goes non-decreasing; same for every `l`-hop. Chain them:
+
+```
+A[i] ≤ A[i+k] ≤ A[i+2k] ≤ ... ≤ A[i+ak] ≤ A[i+ak+l] ≤ ... ≤ A[i+ak+bl] = A[i+h]
+```
+
+So `A[i] ≤ A[i+h]` **already holds before the `h`-pass starts**. Every distance representable as `ak + bl` is pre-sorted for free.
+
+**Which distances are representable?** This is the coin problem: given coins of denominations `k` and `l`, which totals can you make? If `k` and `l` are coprime, everything above `kl − k − l` (the **Frobenius number**) is reachable, and only finitely many values below it are not. Concrete: `k = 2`, `l = 3` gives `kl − k − l = 1`, so *every* distance except 1 is representable.
+
+**Why that yields `O(N)` per pass.** Only the finitely many non-representable distances can still be out of order. Each element in the `h`-pass therefore has a bounded window of possible offenders, independent of `N` — so its insertion moves it a constant number of positions, and `N` elements cost `O(N)`. The pass is linear no matter how large the array.
+
+**Pratt, concretely.** Gaps are the 3-smooth numbers `2^p·3^q`. When the `h`-pass runs, `2h` and `3h` are also 3-smooth and larger, so both already ran. Take `k = 2h`, `l = 3h`:
+
+```
+a·2h + b·3h = h·(2a + 3b),  and 2a + 3b covers 2, 3, 4, 5, 6, ...
+```
+
+Every multiple of `h` is covered except `1·h` itself. Each element can be out of place by at most one position, so each pass costs `O(N)` — and `Θ(log²N)` passes give the `Θ(N log²N)` bound. Pratt's sequence is not fast by accident; it is constructed so that every gap is spanned by two gaps that preceded it.
+
+**Why shared factors are fatal.** If `k` and `l` share a common factor `d`, then `a·k + b·l` is always a multiple of `d`. Distances outside that lattice are never reachable — the Frobenius number is infinite, and no amount of earlier work transfers.
+
+Shell's original `..., 8, 4, 2, 1` is the worst case of this. When the 2-pass runs, the completed passes were 8 and 4, and `a·4 + b·8` produces only multiples of 4. Distances 2, 6, 10, … inherit **nothing**. Every pass starts from scratch, no pass is cheap, and the final `h = 1` pass — a full insertion sort on data that earlier passes barely improved — does essentially all the work. Hence `Θ(N²)`, no better than skipping Shellsort entirely.
+
+Compare Hibbard's `2^k − 1`: consecutive gaps like 7 and 15 are coprime, the lattice fills in, and the bound drops to `Θ(N^{3/2})`. The sequences differ only in arithmetic, not in structure.
+
+**The design rule this implies**, and the reason for the `+1` and `−1` correction terms scattered through Hibbard, Papernov–Stasevich, Knuth and Sedgewick: consecutive gaps must be coprime, or nearly so. A bare `⌈r^k⌉` with integer `r` reintroduces Shell's failure mode exactly.
 
 ### Symbols used in the measurement tables
 
@@ -67,7 +101,7 @@ Bounds that constrain every possible sequence:
 - **Knuth, two-gap average** — for gaps `(h, 1)` the average running time is `2N²/h + √(πN³h)`, minimized around `h ≈ N^{1/3}` giving `Θ(N^{5/3})`. The cleanest closed-form illustration of the pass-count/pass-cost tradeoff.
 - **Janson & Knuth, three-pass** — `O(N^{23/15})` average with optimized gaps.
 - **Weiss** — Shellsort runs in `O(N log N)` on reverse-ordered input, i.e. the classic adversarial case for insertion sort is *not* adversarial here.
-- **Coprimality principle** — if all gaps share a factor `f`, index classes mod `f` never compare until a gap coprime to `f` arrives. Pure powers of two (Shell's original) are the canonical failure: odd and even positions never meet until the final `h = 1` pass, which then does all the work. Every good sequence keeps consecutive gaps coprime or nearly so.
+- **Coprimality principle** (derived in full in §1.1) — gaps sharing a factor `f` inherit no work from each other, because `a·k + b·l` cannot leave the lattice of multiples of `f`. Pure powers of two are the canonical failure. Every good sequence keeps consecutive gaps coprime or nearly so.
 - **Zang 2026** (preprint, arXiv:2607.08997, unrefereed — treat as provisional) — first individually proven nontrivial lower bounds for empirically-derived sequences: `Ω(N^{1.26})` worst case for **Tokuda's** sequence, and the same for *any* strictly decreasing sequence approximating a rational geometric progression. Consequence worth internalizing: the whole ratio-`r` family, which contains every practical sequence in §4, is capped at `Ω(N^{1.26})` worst case. Beating that requires Pratt-style structure, not a better constant.
 
 ## 4. The sequences
