@@ -1,0 +1,66 @@
+goos: darwin
+goarch: amd64
+pkg: github.com/OlegElizarov/Shell_Sort_Golang/lib
+cpu: Intel(R) Core(TM) i5-5350U CPU @ 1.80GHz
+BenchmarkShellSort/1000-4         	   10000	    104753 ns/op	     168 B/op	       4 allocs/op
+BenchmarkShellSort/1000-4         	    7848	    147315 ns/op	     168 B/op	       4 allocs/op
+BenchmarkShellSort/1000-4         	   10000	    106794 ns/op	     168 B/op	       4 allocs/op
+BenchmarkShellSort/1000-4         	   12171	    100935 ns/op	     168 B/op	       4 allocs/op
+BenchmarkShellSort/1000-4         	   12181	     99314 ns/op	     168 B/op	       4 allocs/op
+BenchmarkShellSort/1000-4         	   10000	    107941 ns/op	     168 B/op	       4 allocs/op
+BenchmarkShellSort/1000-4         	   14070	     90200 ns/op	     168 B/op	       4 allocs/op
+BenchmarkShellSort/1000-4         	   13545	     88679 ns/op	     168 B/op	       4 allocs/op
+BenchmarkShellSort/1000-4         	   14392	     84078 ns/op	     168 B/op	       4 allocs/op
+BenchmarkShellSort/1000-4         	   14174	     86818 ns/op	     168 B/op	       4 allocs/op
+BenchmarkShellSort/10000-4        	     856	   1611160 ns/op	     168 B/op	       4 allocs/op
+BenchmarkShellSort/10000-4        	     670	   1690517 ns/op	     168 B/op	       4 allocs/op
+BenchmarkShellSort/10000-4        	     928	   1352099 ns/op	     168 B/op	       4 allocs/op
+BenchmarkShellSort/10000-4        	     945	   1465547 ns/op	     168 B/op	       4 allocs/op
+BenchmarkShellSort/10000-4        	     841	   1412943 ns/op	     168 B/op	       4 allocs/op
+BenchmarkShellSort/10000-4        	     880	   1368806 ns/op	     168 B/op	       4 allocs/op
+BenchmarkShellSort/10000-4        	     877	   1313580 ns/op	     168 B/op	       4 allocs/op
+BenchmarkShellSort/10000-4        	    1065	   1188660 ns/op	     168 B/op	       4 allocs/op
+BenchmarkShellSort/10000-4        	    1070	   1346791 ns/op	     168 B/op	       4 allocs/op
+BenchmarkShellSort/10000-4        	     939	   1256320 ns/op	     168 B/op	       4 allocs/op
+BenchmarkShellSort/30000-4        	     261	   4267975 ns/op	     328 B/op	       5 allocs/op
+BenchmarkShellSort/30000-4        	     254	   4642191 ns/op	     331 B/op	       5 allocs/op
+BenchmarkShellSort/30000-4        	     222	   4608481 ns/op	     329 B/op	       5 allocs/op
+BenchmarkShellSort/30000-4        	     297	   4928185 ns/op	     329 B/op	       5 allocs/op
+BenchmarkShellSort/30000-4        	     163	   7164146 ns/op	     328 B/op	       5 allocs/op
+BenchmarkShellSort/30000-4        	     166	   7504370 ns/op	     332 B/op	       5 allocs/op
+BenchmarkShellSort/30000-4        	     151	   7869674 ns/op	     328 B/op	       5 allocs/op
+BenchmarkShellSort/30000-4        	     199	   5724103 ns/op	     338 B/op	       5 allocs/op
+BenchmarkShellSort/30000-4        	     186	   6433321 ns/op	     331 B/op	       5 allocs/op
+BenchmarkShellSort/30000-4        	     168	   6781382 ns/op	     329 B/op	       5 allocs/op
+BenchmarkStdSort/1000-4           	   16399	     80350 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStdSort/1000-4           	   23127	     51339 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStdSort/1000-4           	   25006	     48462 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStdSort/1000-4           	   24334	     48447 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStdSort/1000-4           	   22920	     53064 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStdSort/1000-4           	   22862	     55590 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStdSort/1000-4           	   21369	     54303 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStdSort/1000-4           	   21328	     61450 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStdSort/1000-4           	   15526	     87122 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStdSort/1000-4           	   16467	     65144 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStdSort/10000-4          	    1611	    708384 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStdSort/10000-4          	    1735	    790502 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStdSort/10000-4          	    1545	    738872 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStdSort/10000-4          	    1658	    775769 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStdSort/10000-4          	    1722	    864432 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStdSort/10000-4          	    1705	    697333 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStdSort/10000-4          	    1623	    733990 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStdSort/10000-4          	    1599	    742267 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStdSort/10000-4          	    1654	    724543 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStdSort/10000-4          	    1668	    733883 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStdSort/30000-4          	     499	   2569671 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStdSort/30000-4          	     469	   2513227 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStdSort/30000-4          	     483	   2457055 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStdSort/30000-4          	     512	   2376519 ns/op	      10 B/op	       0 allocs/op
+BenchmarkStdSort/30000-4          	     411	   2793295 ns/op	       1 B/op	       0 allocs/op
+BenchmarkStdSort/30000-4          	     439	   2570042 ns/op	       1 B/op	       0 allocs/op
+BenchmarkStdSort/30000-4          	     498	   2309413 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStdSort/30000-4          	     535	   2731033 ns/op	       2 B/op	       0 allocs/op
+BenchmarkStdSort/30000-4          	     488	   2756219 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStdSort/30000-4          	     482	   2359354 ns/op	       1 B/op	       0 allocs/op
+PASS
+ok  	github.com/OlegElizarov/Shell_Sort_Golang/lib	123.386s
