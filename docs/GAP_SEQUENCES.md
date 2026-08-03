@@ -108,6 +108,18 @@ Bounds that constrain every possible sequence:
 
 ## 4. The sequences
 
+![Gap values of every surveyed sequence below N = 100,000, plotted on a log scale](gap-structure.svg)
+
+One dot per gap, log scale, every sequence in this section. Generated from the same formulae listed below, so the picture and the text cannot drift apart. Four things are visible at a glance and hard to see in a table:
+
+- **Even spacing = geometric growth.** Practical sequences are evenly spaced dots, because evenly spaced on a log axis *means* a constant ratio. Wider spacing (Knuth 3.01, Sedgewick-1982 3.91) means fewer, bigger jumps; tighter spacing (Hibbard and Papernov–Stasevich at 2.00) means more passes.
+- **The Pratt family is a different species.** 101 gaps below `10^5` versus 10–17 for everything else, visibly fusing into a solid bar at the high end. That density is `Θ(log²N)` — the source of both its `Θ(N log²N)` bound and its unusable constant factor.
+- **Ciura's variants diverge only in the tail.** The three rows are identical for the first five dots, then split — because past their searched range they are extrapolated by the 2.25 rule (§4, Ciura), not measured.
+- **Shell 1959 looks fine and is not.** Its row is evenly spaced like the good ones — the defect is arithmetic, invisible in the positions: every gap divides the previous one, so no pass inherits work (§1.1).
+
+The `ratio` column is the median of consecutive gap ratios (robust for irregular sequences like Pratt); `passes` is the exact gap count below `10^5`, not the asymptotic estimate quoted elsewhere in this document.
+
+
 ### Shell 1959 — `⌊N/2^k⌋`
 
 Gaps `⌊N/2⌋, ⌊N/4⌋, ..., 1`. Worst case **`Θ(N²)`** — no better than insertion sort. Cause is the coprimality failure above: every gap divides the previous one. `t(N) = log₂N`, ratio 2. Of historical interest only; useful in the doc as the negative control that shows ratio alone doesn't determine quality.
