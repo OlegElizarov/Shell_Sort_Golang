@@ -6,7 +6,7 @@ Written 2026-07-14. Revised 2026-08-03 to fold in [GAP_SEQUENCES.md](GAP_SEQUENC
 
 ## Progress
 
-`▰▰▰▰▱▱▱▱▱▱` **4 / 10 phases complete** — 28 / 66 tasks
+`▰▰▰▰▰▱▱▱▱▱` **5 / 10 phases complete** — 40 / 70 tasks
 
 | # | Phase | Tasks | Status | Gate |
 | --- | --- | --- | --- | --- |
@@ -14,8 +14,8 @@ Written 2026-07-14. Revised 2026-08-03 to fold in [GAP_SEQUENCES.md](GAP_SEQUENC
 | 1 | [Gap catalog, in place](#phase-1--gap-catalog-in-place) | 8 | ✅ done | catalog compiles |
 | 2 | [Contract + golden-terms tests](#phase-2--contract--golden-terms-tests) | 8 | ✅ done | 18 sequences pass contract |
 | 3 | [Counting harness + literature validation](#phase-3--counting-harness--literature-validation) | 7 | ✅ done | **4 published counts reproduce** |
-| 3.1 | [Parked nits and small fixes](#phase-31--parked-nits-and-small-fixes) | 3 | 🅿️ backlog | absorbed by later phases |
-| 4 | [Options API + generics](#phase-4--options-api--generics) | 8 | ⬜ not started | old call sites still compile |
+| 3.1 | [Parked nits and small fixes](#phase-31--parked-nits-and-small-fixes) | 4 | 🅿️ backlog | absorbed by later phases |
+| 4 | [Options API + generics](#phase-4--options-api--generics) | 12 | ✅ done | old call sites still compile |
 | 5 | [Test rebuild](#phase-5--test-rebuild) | 6 | ⬜ not started | oracle-based, race-clean |
 | 6 | [Benchmark matrix](#phase-6--benchmark-matrix) | 8 | ⬜ not started | `docs/BENCHMARKS.md` exists |
 | 7 | [Parallel redesign](#phase-7--parallel-redesign) | 6 | ⬜ not started | before/after benchstat |
@@ -244,9 +244,23 @@ Shape:
 
 - One recorded artifact per phase that can move performance — `docs/bench-phase{N}.txt` — produced the same way every time (same `-count`, same machine, same `GOMAXPROCS`), so `benchstat docs/bench-baseline.txt docs/bench-phase7.txt` is always valid.
 - A `make bench-record PHASE=n` target so the recording procedure is not retyped and cannot drift.
+- Every recorded run must include the `slices.Sort` control measured in the same session — Phase 4 learned this the hard way, when the unchanged stdlib sort drifted 10.85% between two recording sessions and would have been credited to Tokuda.
 - A cumulative table at the top of `docs/BENCHMARKS.md`: phase, commit, what changed, sec/op at each size, delta vs the previous phase, delta vs baseline, and delta vs `slices.Sort` — the last column being the one that says whether the library is worth using at all.
 
 **The measurement caveat this has to respect:** Phase 0 recorded ±13–24% variance on `ShellSort` on this machine, so a phase-to-phase delta smaller than roughly 25% is not distinguishable from noise at `-count=10`. Either raise `-count` substantially for recorded runs or report benchstat's p-value alongside each delta and treat anything above 0.05 as "no measured change". A retrospective table that presents noise as progress is worse than no table.
+
+### 3.1.4 — Allocation regression from Phase 4
+
+**Absorb into:** Phase 7 (it rewrites the goroutine machinery, which is half the cause) · **Status:** ⬜ open
+
+Phase 4 took `ShellSort` from 4–5 allocations per call to 11–12, and from 168–329 B/op to 488–616 B/op. Both causes were deliberate side effects rather than mistakes:
+
+- The `append`-only gap generators grow through several reallocations where `make([]int, 10)` allocated once. That pre-sizing is exactly what padded short sequences with trailing zeros, so removing it was the point — but the gap count is predictable (`≈ log_r N`, ~12 for Tokuda at `N = 10^4`), so `make([]int, 0, 16)` would restore the single allocation without bringing the bug back, since the length still starts at zero.
+- The goroutine bodies became closures capturing `gap` and `start`, where the old code passed them as arguments to `go subSort(...)`.
+
+**Do not fix either in isolation.** Phase 7 replaces one-goroutine-per-subarray with chunked workers, which changes the second cause entirely and may remove it. Fixing it now means measuring it twice and discarding the first answer.
+
+Worth keeping in proportion: 12 allocations and ~600 bytes to sort a 240 KB slice is not a problem anyone will notice. It is logged because an unexplained 3× allocation increase in a library is the kind of thing that erodes trust in the benchmark table, not because it costs anything.
 
 ### 3.1.3 — Define the notation; explain the reasoning, not just the result
 
@@ -276,25 +290,54 @@ Fixed for Phase 3:
 
 Now the public API changes. `lib/sort.go` stays in place — the move is Phase 8, so no behavioural change hides inside a rename.
 
-- [ ] Generic signature matching stdlib's shape; type inference keeps existing int-slice call sites compiling unchanged:
+- [x] Generic signature matching stdlib's shape; type inference keeps existing int-slice call sites compiling unchanged:
       ```go
       func ShellSort[S ~[]E, E cmp.Ordered](x S, opts ...Option) S
       func subSort[T cmp.Ordered](x []T, gap, start int) // no pointer, no *sync.WaitGroup param
       ```
-- [ ] Functional options, resolving the TODO at `lib/sort.go:9`:
+- [x] Functional options, resolving the TODO at `lib/sort.go:9`:
       ```go
       type Option func(*config)
       func WithGapSequence(g GapSequence) Option
-      func WithParallelThreshold(minSubarrayLen int) Option // wired up in Phase 7
       ```
-- [ ] Default is `Tokuda` — closed form, unbounded, ~17 passes at `10^6`, ties every Ciura variant on comparisons at `N = 10^4` while beating all of them on exchanges, and its `N`-scaling first gap matters most for the parallel structure (GAP_SEQUENCES.md §6.3, §7.1)
-- [ ] Drop `selectStepSedgewick` — `selectStepHibbard` already went in Phase 2 when `unused` flagged it. Both now live in the catalog as `Sedgewick86` / `Hibbard`, per the user's decision to keep Hibbard selectable rather than delete it
-- [ ] Remove dead code: commented bubble sort (`lib/sort.go:87-94`), commented trim lines (`:55`, `:76`), commented duplicate swap (`:103-104`)
-- [ ] `subSort` takes no `*sync.WaitGroup` — the `if step < 5 { defer wg.Done() }` coupling at `lib/sort.go:81` is what makes the current signature load-bearing; caller owns the barrier
-- [ ] Doc comment on every exported identifier — preserves the zero-lint baseline
-- [ ] Update `cmd/main.go` if the call site needs it (it shouldn't — inference covers it)
+      **`WithParallelThreshold` was deliberately not added here.** The plan had it landing in Phase 4 and being "wired up in Phase 7", which would have shipped an exported option that silently did nothing for a whole phase — worse than either alternative. It now arrives in Phase 7 together with the behaviour it controls. Adding an option later is additive and non-breaking, so nothing is lost by waiting.
+- [x] **Decided with user (backlog 3.1.1):** `WithGapSequence` takes a `GapSequence` value, not a `SequenceID` enum. An enum would be comparable and exhaustiveness-checkable, but it closes the catalog — callers could no longer supply their own generator, which is a poor trade in a library whose entire subject is gap sequences. `TestShellSortWithGapSequence` covers the caller-supplied path
+- [x] Default is `Tokuda` — closed form, unbounded, ~17 passes at `10^6`, ties every Ciura variant on comparisons at `N = 10^4` while beating all of them on exchanges, and its `N`-scaling first gap matters most for the parallel structure (GAP_SEQUENCES.md §6.3, §7.1)
+- [x] Drop `selectStepSedgewick` — `selectStepHibbard` already went in Phase 2 when `unused` flagged it. Both now live in the catalog as `Sedgewick86` / `Hibbard`, per the user's decision to keep Hibbard selectable rather than delete it
+- [x] Remove dead code: commented bubble sort (`lib/sort.go:87-94`), commented trim lines (`:55`, `:76`), commented duplicate swap (`:103-104`)
+- [x] `subSort` takes no `*sync.WaitGroup` — the `if step < 5 { defer wg.Done() }` coupling at `lib/sort.go:81` is what makes the current signature load-bearing; caller owns the barrier
+- [x] Doc comment on every exported identifier — preserves the zero-lint baseline
+- [x] Update `cmd/main.go` if the call site needs it (it shouldn't — inference covers it) — it did not, and `go run ./cmd` still prints sorted output
+- [x] **Added, not in the original plan:** `TestShellSortGenericElements` and `TestShellSortWithGapSequence`. Phase 5 rebuilds the test suite, but shipping a new public API with nothing exercising it for a full phase is not defensible. They cover `string` / `float64` / a named `~[]int` type, all 18 catalog sequences through the option, a caller-supplied sequence, and last-option-wins
+- [x] **Behaviour held constant apart from the default sequence.** The `< 5` parallel rule is preserved verbatim (now `parallelSubarrayCeiling`) with its critique in the doc comment, so this phase's diff is an API change plus a default change, and Phase 7's measurements stay attributable
+- [x] Recorded `docs/bench-phase4.txt` — first entry for the retrospective table in backlog 3.1.2, isolating what the switch to Tokuda bought:
 
-**Gate:** `go build ./... && go vet ./...` clean; existing tests still pass unmodified; `golangci-lint` still zero.
+      `benchstat docs/bench-baseline.txt docs/bench-phase4.txt`, `-count=10`:
+
+      | Benchmark | baseline | phase 4 | vs base |
+      | --- | --- | --- | --- |
+      | `ShellSort/1000` | 100.1µ ± 13% | 104.0µ ± 11% | ~ (p=0.247) |
+      | `ShellSort/10000` | 1.360m ± 18% | 1.269m ± 10% | ~ (p=0.075) |
+      | `ShellSort/30000` | 6.079m ± 24% | 4.434m ± 19% | **−27.05%** (p=0.011) |
+      | `StdSort/1000` | 54.95µ ± 46% | 52.62µ ± 7% | ~ (p=0.353) |
+      | `StdSort/10000` | 736.4µ ± 7% | 707.5µ ± 7% | ~ (p=0.089) |
+      | `StdSort/30000` | 2.541m ± 8% | 2.266m ± 3% | −10.85% (p=0.000) |
+
+      **Read this with the control in mind.** `slices.Sort` is unchanged code, so its −10.85% at 30 000 is pure environment drift between the two recording sessions, not an improvement. Dividing it out leaves roughly **−18%** genuinely attributable to Tokuda at `N = 30 000`, and nothing measurable at 1 000 or 10 000. This is exactly the trap backlog 3.1.2 was written to avoid: the headline −27% would have been a third machine noise.
+
+      The lesson for Phase 6: **record the `slices.Sort` control in the same session as everything it will be compared against**, or cross-session deltas cannot be trusted at all.
+
+      Allocations regressed, deterministically (±0% on every sample):
+
+      | Benchmark | baseline | phase 4 |
+      | --- | --- | --- |
+      | `ShellSort/1000` | 168 B, 4 allocs | 488 B, 11 allocs |
+      | `ShellSort/10000` | 168 B, 4 allocs | 616 B, 12 allocs |
+      | `ShellSort/30000` | 329 B, 5 allocs | 616 B, 12 allocs |
+
+      Two causes, both introduced deliberately: the `append`-only generators grow the gap slice through several reallocations where `make([]int, 10)` was one (that pre-sizing is what produced trailing zeros, so the trade was intended), and the goroutine bodies are now closures capturing `gap` and `start` rather than plain function arguments. The percentages look alarming; the absolute numbers are ~600 bytes and 12 allocations per call to sort a 240 KB slice, which is noise. Parked as backlog 3.1.4 rather than fixed here, since Phase 7 rewrites the goroutine machinery anyway and would invalidate any fix made now
+
+**Gate:** ✅ `go build ./... && go vet ./...` clean; the pre-existing tests pass **unmodified**, which is the real evidence that type inference kept the old call sites working; `golangci-lint` still `0 issues.`
 
 ---
 
