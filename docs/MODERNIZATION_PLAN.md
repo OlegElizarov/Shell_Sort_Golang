@@ -6,13 +6,13 @@ Written 2026-07-14. Revised 2026-08-03 to fold in [GAP_SEQUENCES.md](GAP_SEQUENC
 
 ## Progress
 
-`▰▰▱▱▱▱▱▱▱▱` **2 / 10 phases complete** — 13 / 63 tasks
+`▰▰▰▱▱▱▱▱▱▱` **3 / 10 phases complete** — 21 / 65 tasks
 
 | # | Phase | Tasks | Status | Gate |
 | --- | --- | --- | --- | --- |
 | 0 | [Baseline & prep](#phase-0--baseline--prep) | 5 | ✅ done | tree green |
 | 1 | [Gap catalog, in place](#phase-1--gap-catalog-in-place) | 8 | ✅ done | catalog compiles |
-| 2 | [Contract + golden-terms tests](#phase-2--contract--golden-terms-tests) | 6 | ⬜ not started | 18 sequences pass contract |
+| 2 | [Contract + golden-terms tests](#phase-2--contract--golden-terms-tests) | 8 | ✅ done | 18 sequences pass contract |
 | 3 | [Counting harness + literature validation](#phase-3--counting-harness--literature-validation) | 6 | ⬜ not started | **4 published counts reproduce** |
 | 4 | [Options API + generics](#phase-4--options-api--generics) | 8 | ⬜ not started | old call sites still compile |
 | 5 | [Test rebuild](#phase-5--test-rebuild) | 6 | ⬜ not started | oracle-based, race-clean |
@@ -44,7 +44,7 @@ Small Go library (module `github.com/OlegElizarov/Shell_Sort_Golang`, `go 1.26`)
 | `ShellSort([]int) []int` is `int`-only, non-configurable | `lib/sort.go:12` | Phase 4 |
 | `TODO: const for choosing select func` unresolved; gap sequence picked by editing a line | `lib/sort.go:9`, `:15` | Phase 4 |
 | `make([]int, 10)` pre-size leaves trailing zeros for short sequences | `lib/sort.go:39`, `:64` | Phase 1 |
-| `selectStepHibbard` dead outside its own test | `lib/sort.go:59` | Phase 4 |
+| ~~`selectStepHibbard` dead outside its own test~~ | ~~`lib/sort.go:59`~~ | **done in Phase 2** |
 | Commented bubble sort + trim lines + duplicate swap | `lib/sort.go:55`, `:76`, `:87-94`, `:103-104` | Phase 4 |
 | `d*3 < length` silently drops largest gaps | `lib/sort.go:41`, `:47` | Phase 7 |
 | `if step < 5` parallelizes exactly where parallelism is scarcest | `lib/sort.go:19`, `:81` | Phase 7 |
@@ -131,12 +131,14 @@ Full table with formulas, first terms and roles: [Appendix A](#appendix-a--gap-s
 
 New file `lib/gaps_test.go`. This is where the catalog becomes trustworthy — do not carry an untested generator into Phase 3.
 
-- [ ] Registry slice `allSequences []GapSequence` so every test loops over the catalog rather than naming entries one at a time
-- [ ] `TestGapSequenceContract` — for each entry × each `N` in `{0, 1, 2, 16, 128, 1000, 50000}`: ascending, strictly increasing, `gaps[0] == 1`, all `< N` (for `N > 1`), non-empty
-- [ ] `TestGapSequenceGoldenTerms` — assert the exact first terms from [Appendix A](#appendix-a--gap-sequence-catalog). Transcribed from primary sources; the only defense against a plausible-looking formula that silently generates the wrong sequence, which is the failure mode that cost the most time while writing GAP_SEQUENCES.md
-- [ ] Delete `TestSelectStepSedgewick` / `TestSelectStepHibbard` — superseded, and their `rand.IntN` lengths are non-reproducible
-- [ ] `t.Parallel()` at top level and in every subtest (matches existing house style; `paralleltest` linter enforces it)
-- [ ] Update this file's progress table
+- [x] Registry slice `allSequences []GapSequence` so every test loops over the catalog rather than naming entries one at a time
+- [x] `TestGapSequenceContract` — for each entry × each `N` in `{0, 1, 2, 16, 128, 1000, 50000}`: ascending, strictly increasing, `gaps[0] == 1`, all `< N` (for `N > 1`), non-empty
+- [x] `TestGapSequenceGoldenTerms` — assert the exact first terms from [Appendix A](#appendix-a--gap-sequence-catalog). Transcribed from primary sources; the only defense against a plausible-looking formula that silently generates the wrong sequence, which is the failure mode that cost the most time while writing GAP_SEQUENCES.md
+- [x] Delete `TestSelectStepSedgewick` / `TestSelectStepHibbard` — superseded, and their `rand.IntN` lengths are non-reproducible
+- [x] **Pulled forward from Phase 4:** deleting those tests left `selectStepHibbard` with no callers, and `unused` flagged it — holding the zero-lint baseline required removing the function and its commented call site (`lib/sort.go:16`) now rather than in Phase 4. Its replacement `Hibbard` was already in the catalog, so nothing was lost
+- [x] `TestCiuraExtension` (**added, not in the original plan**) — the `⌊2.25h⌋` continuation past each Ciura table is the one part of the catalog with no source to check against, so it gets its own test: the last tabulated term is present, extension actually happens, and every extended term is `⌊2.25·previous⌋`
+- [x] `t.Parallel()` at top level and in every subtest (matches existing house style; `paralleltest` linter enforces it)
+- [x] Update this file's progress table
 
 **Gate:** all 18 sequences pass contract + golden terms under `go test -race ./...`.
 
@@ -188,7 +190,7 @@ Now the public API changes. `lib/sort.go` stays in place — the move is Phase 8
       func WithParallelThreshold(minSubarrayLen int) Option // wired up in Phase 7
       ```
 - [ ] Default is `Tokuda` — closed form, unbounded, ~17 passes at `10^6`, ties every Ciura variant on comparisons at `N = 10^4` while beating all of them on exchanges, and its `N`-scaling first gap matters most for the parallel structure (GAP_SEQUENCES.md §6.3, §7.1)
-- [ ] Drop `selectStepSedgewick` / `selectStepHibbard` — both now live in the catalog as `Sedgewick86` / `Hibbard`, per the user's decision to keep Hibbard selectable rather than delete it
+- [ ] Drop `selectStepSedgewick` — `selectStepHibbard` already went in Phase 2 when `unused` flagged it. Both now live in the catalog as `Sedgewick86` / `Hibbard`, per the user's decision to keep Hibbard selectable rather than delete it
 - [ ] Remove dead code: commented bubble sort (`lib/sort.go:87-94`), commented trim lines (`:55`, `:76`), commented duplicate swap (`:103-104`)
 - [ ] `subSort` takes no `*sync.WaitGroup` — the `if step < 5 { defer wg.Done() }` coupling at `lib/sort.go:81` is what makes the current signature load-bearing; caller owns the barrier
 - [ ] Doc comment on every exported identifier — preserves the zero-lint baseline

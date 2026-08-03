@@ -13,7 +13,6 @@ func ShellSort(slice []int) []int {
 	length := len(slice)
 	var wg sync.WaitGroup
 	d := selectStepSedgewick(length)
-	// d := selectStepHibbard(length)
 	for ind := range d {
 		// step == num of subarrays
 		if d[len(d)-ind-1] < 5 { // 5 sub array can't sort async good enough because of cores num
@@ -53,27 +52,6 @@ func selectStepSedgewick(length int) []int {
 		}
 	}
 	// steps = steps[:int(i)-1]
-	return steps
-}
-
-func selectStepHibbard(length int) []int {
-	if length <= 1 {
-		return []int{1}
-	}
-	var d float64
-	steps := make([]int, 10)
-	i := 0
-	for i = 1; d < float64(length); i++ {
-		d = math.Pow(2, float64(i)) - 1
-		if d < float64(length) {
-			if i < len(steps) {
-				steps[i-1] = int(d)
-			} else {
-				steps = append(steps, int(d))
-			}
-		}
-	}
-	// steps = steps[len(steps)-i+2:]
 	return steps
 }
 
