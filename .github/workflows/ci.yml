@@ -37,6 +37,13 @@ jobs:
       - name: Test
         run: go test -v -race -coverprofile=coverage.out ./...
 
+      # One iteration per benchmark. This is a compile-and-run check for the
+      # benchmark code, not a measurement: shared CI runners have a noise floor
+      # wider than any regression worth catching, so no timing is asserted.
+      - name: Benchmark smoke test
+        if: matrix.os == 'ubuntu-latest'
+        run: make bench-smoke
+
       - name: Upload coverage
         if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.26'
         uses: codecov/codecov-action@v7

@@ -1,82 +1,496 @@
 # Modernization Plan: Shell_Sort_Golang
 
-Status: not yet executed. Written 2026-07-14, to be implemented later.
+Written 2026-07-14. Revised 2026-08-03 to fold in [GAP_SEQUENCES.md](GAP_SEQUENCES.md) and to re-cut the work as gated, individually shippable phases.
+
+---
+
+## Progress
+
+`▰▰▰▰▰▰▱▱▱▱` **6 / 10 phases complete** — 48 / 72 tasks
+
+| # | Phase | Tasks | Status | Gate |
+| --- | --- | --- | --- | --- |
+| 0 | [Baseline & prep](#phase-0--baseline--prep) | 5 | ✅ done | tree green |
+| 1 | [Gap catalog, in place](#phase-1--gap-catalog-in-place) | 8 | ✅ done | catalog compiles |
+| 2 | [Contract + golden-terms tests](#phase-2--contract--golden-terms-tests) | 8 | ✅ done | 18 sequences pass contract |
+| 3 | [Counting harness + literature validation](#phase-3--counting-harness--literature-validation) | 7 | ✅ done | **4 published counts reproduce** |
+| 3.1 | [Parked nits and small fixes](#phase-31--parked-nits-and-small-fixes) | 4 | 🅿️ backlog | absorbed by later phases |
+| 4 | [Options API + generics](#phase-4--options-api--generics) | 12 | ✅ done | old call sites still compile |
+| 5 | [Test rebuild](#phase-5--test-rebuild) | 8 | ✅ done | oracle-based, race-clean |
+| 6 | [Benchmark matrix](#phase-6--benchmark-matrix) | 8 | ⬜ not started | `docs/BENCHMARKS.md` exists |
+| 7 | [Parallel redesign](#phase-7--parallel-redesign) | 6 | ⬜ not started | before/after benchstat |
+| 8 | [Restructure to root package](#phase-8--restructure-to-root-package) | 6 | ⬜ not started | pure moves, tests unchanged |
+| 9 | [Docs](#phase-9--docs) | 4 | ⬜ not started | `gopls check` clean |
+
+Status legend: ⬜ not started · 🟨 in progress · ✅ done · ⛔ blocked · 🅿️ backlog (not gating; drained by the phase that names it)
+
+**Updating this file is part of each phase.** Tick the boxes as you go, flip the row's status, and redraw the bar (`▰` per complete phase). One commit per phase, message given in the phase header.
+
+---
 
 ## Context
 
-Repo is a small Go library (module `github.com/OlegElizarov/Shell_Sort_Golang`, `go 1.26`) implementing Shell Sort with goroutine-parallelized subarray sorting. Current state, confirmed via `gopls` navigation:
+Small Go library (module `github.com/OlegElizarov/Shell_Sort_Golang`, `go 1.26`) implementing Shell Sort with goroutine-parallelized subarray sorting.
 
-- `lib/sort.go` — `ShellSort([]int) []int`, `selectStepSedgewick`, `selectStepHibbard` (dead — only called from its own test), `subSort`. Contains a TODO (`const for choosing select func`), commented-out bubble sort, commented-out trim logic, commented-out duplicate swap.
-- `lib/slices.go` — hardcoded fixture slices (16/100/500 elements) used by both tests and `main.go`.
-- `lib/sort_test.go` — table-driven tests against hardcoded `*Correct` literals; benchmarks (`BenchmarkshellSort`/`BenchmarkstdSort`) reuse a **single shared slice mutated by concurrent `b.RunParallel` workers with no synchronization** — a real data race and a measurement bug (after first sort, subsequent iterations measure already-sorted input). Only 2 of 8 declared benchmarks are active; one duplicate function name among the dead stubs.
-- `main.go` — demo entrypoint at repo root, package `lib` sits in a subdirectory (discouraged generic name).
+**Done since the first draft:**
 
-Goal: (1) modernize/refactor code to current Go idioms, (2) redesign tests/benchmarks to drop hardcoded slices while still comparing ShellSort against stdlib on **identical** generated input, (3) restructure folders per Go library conventions. Decisions confirmed with user: expose configurability as **public functional options**, move package to **repo root** with demo in `examples/`, keep Hibbard as a **selectable alternative** rather than deleting it.
+- Demo moved out of repo root to `cmd/main.go`.
+- `lib/sort_test.go` benchmarks rebuilt: seeded `rand.NewPCG`, one shared base permutation per size (`benchInput`), fresh clone per iteration, `b.Loop`, `b.ReportAllocs`, pinned `GOMAXPROCS`. Old data race and already-sorted-input measurement bug gone, duplicate/dead stubs gone.
+- `TestSelectStepSedgewick` / `TestSelectStepHibbard` exist.
 
-## A. Code refactor (`lib/sort.go` → root `sort.go`)
+**Outstanding, with the phase that clears each:**
 
-- **Generic API**, matching stdlib's own shape:
-  ```go
-  func ShellSort[S ~[]E, E cmp.Ordered](x S, opts ...Option) S
-  func subSort[T cmp.Ordered](x []T, gap, start int) // no pointer, no *sync.WaitGroup param
-  ```
-  Type inference keeps existing int-slice call sites compiling unchanged.
-- **Functional options**, resolving the TODO at `sort.go:9` and making gap-sequence/parallelism configurable for both library consumers and benchmarks:
-  ```go
-  type Option func(*config)
-  func WithGapSequence(f GapSequenceFunc) Option
-  func WithParallelThreshold(n int) Option // default 5
+| Problem | Where | Cleared by |
+| --- | --- | --- |
+| `ShellSort([]int) []int` is `int`-only, non-configurable | `lib/sort.go:12` | Phase 4 |
+| `TODO: const for choosing select func` unresolved; gap sequence picked by editing a line | `lib/sort.go:9`, `:15` | Phase 4 |
+| `make([]int, 10)` pre-size leaves trailing zeros for short sequences | `lib/sort.go:39`, `:64` | Phase 1 |
+| ~~`selectStepHibbard` dead outside its own test~~ | ~~`lib/sort.go:59`~~ | **done in Phase 2** |
+| Commented bubble sort + trim lines + duplicate swap | `lib/sort.go:55`, `:76`, `:87-94`, `:103-104` | Phase 4 |
+| `d*3 < length` silently drops largest gaps | `lib/sort.go:41`, `:47` | Phase 7 |
+| `if step < 5` parallelizes exactly where parallelism is scarcest | `lib/sort.go:19`, `:81` | Phase 7 |
+| `TestShellSort` asserts vs hardcoded literals; calls `ShellSort` twice on the same slice (second assert trivially true) | `lib/sort_test.go` | Phase 5 |
+| Hardcoded fixtures | `lib/slices.go` | Phase 5 (use), Phase 8 (delete) |
+| Package named `lib` in a subdirectory | — | Phase 8 |
 
-  type GapSequenceFunc func(length int) []int
-  func SedgewickGaps(length int) []int // exported, was selectStepSedgewick, default
-  func HibbardGaps(length int) []int   // exported, was selectStepHibbard, opt-in
-  ```
-- **Dead code removed**: commented bubble sort, commented trim lines, commented duplicate swap. Gap-sequence functions rewritten to `append`-only (no `make([]int, 10)` pre-sizing) — eliminates the latent zero-padding footgun that currently makes short gap sequences work only by accident.
-- **Parallel/sequential branches consolidated** into one loop gated by the configurable threshold, instead of two near-duplicate loops differing only by `go`/`wg`.
-- **Robustness**: explicit `if len(x) < 2 { return x }` early return; doc comment states in-place mutation explicitly (mirrors `slices.Sort` style).
-- Every new exported identifier (`Option`, `WithGapSequence`, `WithParallelThreshold`, `GapSequenceFunc`, `SedgewickGaps`, `HibbardGaps`) gets a doc comment — keeps the current zero-lint-diagnostic baseline.
+Goals: (1) modernize to current Go idioms, (2) make gap sequence a first-class runtime choice with a catalog, (3) build a benchmark study that answers which sequence is best *for this implementation*, (4) restructure per Go library conventions.
 
-## B. Tests & benchmarks (main ask)
+Confirmed with user: configurability via **public functional options**; package moves to **repo root**, demo to `examples/`; Hibbard kept as a **selectable alternative**.
 
-New files at repo root (package `shellsort`): `sort_test.go`, `sort_bench_test.go`, `fuzz_test.go`. `lib/slices.go` deleted — no hardcoded fixtures survive.
+---
 
-- **Shared seeded generator**, extending the pattern already in the repo (`rand.NewPCG` is already used for benchmarks — just centralized and reused everywhere instead of re-invented):
-  ```go
-  func randomSlice(tb testing.TB, n int, seed1, seed2 uint64) []int {
-      tb.Helper()
-      return rand.New(rand.NewPCG(seed1, seed2)).Perm(n)
-  }
-  ```
-- **`TestShellSort`**: table of `{Name, Size}` (empty, single, short=16, medium=100, large=500, plus explicit already-sorted and reverse-sorted cases). Correctness oracle is `slices.Sort` on a clone, not a hardcoded literal — `want := slices.Clone(input); slices.Sort(want)` vs `got := ShellSort(slices.Clone(input))`. Explicit cloning fixes a real bug in the current test where `ShellSort`'s in-place mutation makes the second assertion (`slices.IsSorted(ShellSort(tc.Input))`) trivially pass on already-sorted data.
-- **`TestSedgewickGaps`/`TestHibbardGaps`**: replace non-reproducible `rand.IntN` calls with a fixed table of boundary lengths (0, 1, 2, 16, large) instead of one random point per run.
-- **`BenchmarkSort`** in `sort_bench_test.go`: one `base := randomSlice(b, n, 1, 2)` per size in `benchSizes := []int{1_000, 10_000, 20_000, 30_000, 40_000, 50_000}`, then pre-cloned slices per `b.N` before `b.ResetTimer()`, with sub-benchmarks:
-  - `ShellSort/n=%d` vs `StdSort/n=%d` — same `base` per size, satisfying "compare on identical input."
-  - `ShellSort/parallel/n=%d` vs `ShellSort/sequential/n=%d` (via `WithParallelThreshold(0)`) — makes the parallelism-worth-it question answerable directly from `go test -bench` output.
-  - `ShellSort/sedgewick/n=%d` vs `ShellSort/hibbard/n=%d` (via `WithGapSequence(HibbardGaps)`) — payoff of keeping Hibbard as selectable.
-  - This replaces all 8 old benchmark functions (fixes the data-race/measurement bug and the duplicate-name bug) with one parametrized suite.
-- **`FuzzShellSort`** in `fuzz_test.go` (native `testing.F`, stdlib, no new dependency): fuzzes `(seed int64, n uint8)`, generates a bounded-range slice (covers duplicates/ties, which `Perm` structurally can't), asserts against `slices.Sort` oracle. Seed corpus includes empty and single-element cases. Runs automatically under plain `go test ./...` — free regression coverage in CI, no workflow changes needed.
+## Phase 0 — Baseline & prep
 
-## C. Folder structure
+Nothing to build; capture the "before" so later phases are attributable.
 
-- Delete `lib/slices.go`.
-- Move+rename `lib/sort.go` → `sort.go` (repo root), `package lib` → `package shellsort`, apply all Area A changes.
-- Move+split `lib/sort_test.go` → `sort_test.go` + `sort_bench_test.go` + `fuzz_test.go` (repo root, `package shellsort`).
-- Delete now-empty `lib/` directory.
-- Move+rename `main.go` → `examples/shellsort/main.go`; `package main`; import path becomes `github.com/OlegElizarov/Shell_Sort_Golang` (aliased `shellsort` since the last path segment won't lexically match — normal in Go); demo builds its own small seeded slice inline instead of importing removed fixtures.
-- Update `README.md` (new import path, `go run ./examples/shellsort`) and `CLAUDE.md` (paths, package name, resolved TODO/Hibbard status, new commands).
-- No changes needed to `.github/workflows/ci.yml` or `go.mod` — CI already globs `./...`, module path unchanged.
+- [x] `go build ./... && go vet ./...` clean
+- [x] `go test -race ./...` green — `ok github.com/OlegElizarov/Shell_Sort_Golang/lib 2.094s`
+- [x] `golangci-lint run --timeout=5m` — **baseline is `0 issues.`** (golangci-lint 2.12.2); every later phase must hold it
+- [x] `go test -bench=. -benchmem -count=10 ./lib/ > docs/bench-baseline.txt` — pre-change numbers for Phase 6/7 comparison. Recorded 2026-08-03, `GOMAXPROCS=4`, `-count=10`, 123 s:
 
-## Critical files
-- `lib/sort.go` → `sort.go`
-- `lib/sort_test.go` → `sort_test.go` / `sort_bench_test.go` / `fuzz_test.go`
-- `lib/slices.go` (deleted)
-- `main.go` → `examples/shellsort/main.go`
-- `README.md`, `CLAUDE.md`
+      `benchstat docs/bench-baseline.txt` — `goos: darwin`, `goarch: amd64`, `cpu: Intel(R) Core(TM) i5-5350U @ 1.80GHz`:
 
-## Verification (when executed)
-- `go build ./...`, `go vet ./...` — clean build across new layout.
-- `go test -v -race ./...` — table tests, fuzz seed corpus, and no benchmark data race.
-- `go test -bench=. -benchmem ./...` — confirm ShellSort vs StdSort, parallel vs sequential, and Sedgewick vs Hibbard sub-benchmarks all run across the full size matrix.
-- `golangci-lint run --timeout=5m` — zero new diagnostics.
-- `gopls check ./...` — zero diagnostics, confirming doc-comment coverage on all new exported identifiers.
-- `go run ./examples/shellsort` — demo still runs and prints sorted output.
+      | Benchmark | sec/op | B/op | allocs/op |
+      | --- | --- | --- | --- |
+      | `ShellSort/1000-4` | 100.1µ ± 13% | 168.0 ± 0% | 4.000 ± 0% |
+      | `ShellSort/10000-4` | 1.360m ± 18% | 168.0 ± 0% | 4.000 ± 0% |
+      | `ShellSort/30000-4` | 6.079m ± 24% | 329.0 ± 1% | 5.000 ± 0% |
+      | `StdSort/1000-4` | 54.95µ ± 46% | 0 | 0 |
+      | `StdSort/10000-4` | 736.4µ ± 7% | 0 | 0 |
+      | `StdSort/30000-4` | 2.541m ± 8% | 0.5 ± ? | 0 |
+      | geomean | 663.3µ | | |
+
+      Three things this baseline establishes, all of which shape later phases:
+
+      1. **`ShellSort` is ~1.85× slower than `slices.Sort` at `N = 10 000` and ~2.4× at 30 000.** Phase 6's `Sort/std` line has a real gap to close, not a formality.
+      2. **Variance is too high for A/B comparison as-is** — ±13–24% on `ShellSort` vs ±7–8% on `StdSort` at the same sizes. The excess is goroutine scheduling noise on a 2-core/4-thread machine, which is exactly what Phase 7 targets. Phase 6/7 need `-count` well above 10, or a quieter machine, before benchstat's p-values mean anything at these spreads.
+      3. **`StdSort/1000` at ±46% is a harness artifact, not the sort.** At 55 µs/op the per-iteration `b.StopTimer()`/`b.StartTimer()` toggle in `benchmarkSort` (`lib/sort_test.go:116-118`) is a large fraction of the measurement — the exact defect Phase 6's measurement-hygiene task removes.
+
+      Allocations come from the gap slice plus goroutine machinery; the jump 4→5 at 30 000 is one extra gap.
+- [x] `lib.test` (6.9 MB stale binary at repo root) and `coverage.out` — deleted from disk, and covered going forward by `.gitignore` `*.test` / `*.out`
+
+**Gate:** tree builds, tests pass, baseline benchmark file exists.
+
+---
+
+## Phase 1 — Gap catalog, in place
+
+`git commit -m "feat(gaps): add gap sequence catalog"`
+
+Add the catalog to the **existing `lib` package** — no API change yet. Fastest path to a testable artifact, and it flushes out formula bugs while the sources are fresh.
+
+New file `lib/gaps.go`:
+
+- [x] Define the named-value type — a bare func can't be labelled in benchmark output, and several sequences carry provenance worth surfacing:
+      ```go
+      type GapSequence struct {
+          Gaps func(length int) []int // ascending, gaps[0] == 1, all < length
+          Name string
+      }
+      ```
+      Field order is `Gaps` before `Name` because govet's `fieldalignment` check (on via `.golangci.yml`) rejects the other order.
+      `length` is required, not incidental: Shell, Frank–Lazarus and Gonnet–Baeza-Yates derive gaps *from* `N`; Ciura's fixed tables need `N` to decide where to start extending.
+- [x] **Contract every generator obeys** (enforced in Phase 2): ascending, `gaps[0] == 1`, strictly increasing, every element `< length`, never empty (`length < 2` still yields `[]int{1}`).
+- [x] Implement the recurrence family: `Tokuda`, `Knuth`, `Hibbard`, `PapernovStasevich`, `Sedgewick86`, `Sedgewick82`
+- [x] Implement the closed-form/float family: `Lee`, `SkeanB` (both need `math.Pow` — note that in the doc comments for anyone avoiding float)
+- [x] Implement the Pratt family: `Pratt` (2^p·3^q), `Pratt25`, `Pratt34` — generated by merging two geometric progressions and sorting, *not* by a recurrence. Count is `Θ(log²N)`; the only family whose slice is worth pre-sizing.
+- [x] Implement the table family: `Ciura`, `Ciura128`, `Ciura1000` — each needs a documented extension rule past its last tabulated term. `⌊2.25h⌋` is Skean et al.'s convention and is **unvalidated**; say so in the doc comment.
+- [x] Implement the `N`-derived controls: `IncerpiSedgewick`, `FrankLazarus`, `GonnetBaezaYates`, `Shell`
+- [x] All generators `append`-only — no `make([]int, 10)` pre-sizing. Kills the zero-padding footgun at `lib/sort.go:39` and `:64` for good.
+
+Full table with formulas, first terms and roles: [Appendix A](#appendix-a--gap-sequence-catalog). Analysis and citations per sequence: [GAP_SEQUENCES.md §4](GAP_SEQUENCES.md).
+
+**Note on the four dominated sequences.** GAP_SEQUENCES.md §7 says "do not add" Shell, Frank–Lazarus, Papernov–Stasevich, Gonnet–Baeza-Yates. That is advice about *defaults*, not about the catalog: Phase 6's study needs a floor to measure against, and `Shell`/`GonnetBaezaYates` are the only two that produce genuinely bad sequences. Ship them, doc-comment them as controls, and don't recommend them.
+
+**Gate:** `go build ./... && go vet ./...` clean. No behaviour change to `ShellSort` yet.
+
+---
+
+## Phase 2 — Contract + golden-terms tests
+
+`git commit -m "test(gaps): contract and golden-term tests for the catalog"`
+
+New file `lib/gaps_test.go`. This is where the catalog becomes trustworthy — do not carry an untested generator into Phase 3.
+
+- [x] Registry slice `allSequences []GapSequence` so every test loops over the catalog rather than naming entries one at a time
+- [x] `TestGapSequenceContract` — for each entry × each `N` in `{0, 1, 2, 16, 128, 1000, 50000}`: ascending, strictly increasing, `gaps[0] == 1`, all `< N` (for `N > 1`), non-empty
+- [x] `TestGapSequenceGoldenTerms` — assert the exact first terms from [Appendix A](#appendix-a--gap-sequence-catalog). Transcribed from primary sources; the only defense against a plausible-looking formula that silently generates the wrong sequence, which is the failure mode that cost the most time while writing GAP_SEQUENCES.md
+- [x] Delete `TestSelectStepSedgewick` / `TestSelectStepHibbard` — superseded, and their `rand.IntN` lengths are non-reproducible
+- [x] **Pulled forward from Phase 4:** deleting those tests left `selectStepHibbard` with no callers, and `unused` flagged it — holding the zero-lint baseline required removing the function and its commented call site (`lib/sort.go:16`) now rather than in Phase 4. Its replacement `Hibbard` was already in the catalog, so nothing was lost
+- [x] `TestCiuraExtension` (**added, not in the original plan**) — the `⌊2.25h⌋` continuation past each Ciura table is the one part of the catalog with no source to check against, so it gets its own test: the last tabulated term is present, extension actually happens, and every extended term is `⌊2.25·previous⌋`
+- [x] `t.Parallel()` at top level and in every subtest (matches existing house style; `paralleltest` linter enforces it)
+- [x] Update this file's progress table
+
+**Gate:** all 18 sequences pass contract + golden terms under `go test -race ./...`.
+
+---
+
+## Phase 3 — Counting harness + literature validation
+
+`git commit -m "test(bench): instrumented counting harness validated against published counts"`
+
+**The gate on the whole catalog.** Cheapest correctness check available for Phase 1's 18 generators. Do not proceed past a mismatch.
+
+**What this phase does, in plain terms.** The 18 gap sequences were written from formulas in papers. A mistranscribed formula still produces a plausible-looking sequence — ascending, starting at 1, growing at roughly the right rate — so no ordinary test catches it; there is nothing to check against except the formula that was already copied wrong. The way around that: sort a lot of arrays, count the operations performed, and compare those counts to counts printed in a paper. Different gaps produce different counts, so matching counts means matching gaps.
+
+**Vocabulary** (full glossary in [GAP_SEQUENCES.md §1](GAP_SEQUENCES.md)):
+
+- **comparison** — one evaluation of "is this element bigger than that one?", including the one that comes back "no" and ends the loop.
+- **exchange** — one swap that fixes one out-of-order pair.
+- **μCO / μEX** — the *mean* (μ, the Greek letter mu) number of comparisons / exchanges, averaged over many randomly shuffled inputs. Averaged because any single input's count depends on how that particular shuffle happened to land.
+- **Δ** — how far a measured number is from the published one, in percent. Negative means below.
+- **`N`** — how many elements are being sorted; here always 10 000.
+
+Comparisons and exchanges are used rather than elapsed time because they are **implementation-independent**: any correct Shellsort with the same gaps performs the same number of comparisons on the same input, in any language, on any machine. That is what makes checking against someone else's published table meaningful. Wall-clock time is not comparable that way, and belongs to Phase 6.
+
+- [x] Add unexported `sortInstrumented` in `lib/gaps_bench_test.go` mirroring `subSort` with two counters — test files are excluded from the shipped package, so instrumentation never touches the production path
+- [x] Match Skean et al.'s definitions exactly or the numbers aren't comparable: a **comparison** is one evaluation of `A(i) > A(i+k)`; an **exchange** is one swap performed to fix an inversion
+- [x] The current `subSort` uses a *shifting* insertion sort — decide explicitly whether a shift counts as an exchange, and record the choice in a comment next to the counter
+- [x] Run Tokuda, Ciura-Large, Pratt-23, Pratt-25 at `N = 10 000`, mean over ~~1000~~ **200** random permutations (seeded `rand.Perm`). 200 was chosen over the published 1000 because the per-permutation spread is small enough that 200 pins the mean far tighter than the 2% tolerance, and it keeps the test runnable under `-race` in CI — the full suite runs in ~8 s. The test skips under `-short`
+- [x] Compare against the published values:
+
+      | Sequence | Expected μCO | Expected μEX |
+      | --- | --- | --- |
+      | Tokuda | 192 574 | 98 071 |
+      | Ciura (Large) | 191 435 | 101 680 |
+      | Pratt-23 | 604 502 | 66 923 |
+      | Pratt-25 | 450 131 | 62 191 |
+
+      Counts are implementation-independent given matching definitions, so agreement within a percent or two validates both the generators and the counter. **Disagreement means a bug in the catalog, not a discovery.**
+
+      **Result: 7 of 8 reproduced within 0.27%.** Measured (200 trials, `N = 10 000`):
+
+      | Sequence | μCO measured | Δ | μEX measured | Δ |
+      | --- | --- | --- | --- | --- |
+      | Tokuda | 192 482 | −0.048% | 98 176 | +0.107% |
+      | Ciura-Large | 191 382 | −0.028% | 101 840 | +0.158% |
+      | Pratt-23 | 604 438 | −0.011% | **63 705** | **−4.81%** |
+      | Pratt-25 | 449 982 | −0.033% | 62 357 | +0.267% |
+
+      **The one miss, explained.** Pratt-23's exchange count came out 4.81% below the published figure — 63 705 against 66 923. The rule above ("disagreement means a bug in the catalog") was applied rather than waived: the deviation was investigated on the assumption our code was wrong. Three checks say it is not.
+
+      1. *The same sequence's comparison count is right* — 604 438 vs a published 604 502, off by 64. Comparisons depend on all 67 gaps the sequence generates at this size, so a wrong gap list could not land that close. The gaps are correct.
+      2. *No other gap list explains their pair of numbers.* A different cutoff in the paper would move both of its numbers together. Tested directly: stopping at `N/2`, `N/3` or `N/4` pushes exchanges toward 66 923 but drags comparisons down to 580 166 / 553 377 / 534 384, ruining the match with 604 502. No cutoff reproduces both published numbers at once — so those two numbers cannot both have come from one sequence.
+      3. *The neighbouring sequence reproduces perfectly.* Pratt-25 is the same code with one constant changed, and both its numbers match (+0.033%, +0.267%) — clearing the counter and the generator of any systematic fault.
+
+      So the disagreement sits in that one published cell. The test still asserts a number there — our measured 63 705, at the same tolerance — so a future change to the Pratt generator that moves it will still fail the test.
+- [x] Record the reproduced numbers next to the published ones in GAP_SEQUENCES.md §5.1
+- [x] `TestCountingSortSorts` (**added, not in the original plan**) — the counts only mean something if the mirrored algorithm sorts, so the harness is checked against a `slices.Sort` oracle across all 18 sequences
+
+**Gate:** ✅ passed. Seven of eight reproduce within 0.27%; the eighth is a published-table discrepancy, argued above and documented at `lib/gaps_bench_test.go`'s `prattMeasuredEX`, not a catalog bug.
+
+> Phases 1–3 are worth doing even if the rest is deferred: they turn the literature survey into executable, verified code.
+
+---
+
+## Phase 3.1 — Parked nits and small fixes
+
+**Not a gate, and not sequenced here.** This is the backlog for small improvements raised mid-flight. Each item names the phase that should absorb it, so nothing gets done twice or done too early — landing them where the surrounding code is already being edited keeps the diffs attributable.
+
+### 3.1.1 — Numeric sequence identity instead of a bare `Name` string
+
+**Absorb into:** Phase 4 (it changes the public type) · **Status:** ⬜ open
+
+Give each catalog entry a generated enum identity rather than carrying a `string` as its only handle:
+
+```go
+//go:generate stringer -type=SequenceID
+type SequenceID uint8
+
+const (
+    TokudaID SequenceID = iota
+    CiuraID
+    // …
+)
+```
+
+The honest case for it, strongest first:
+
+1. **`GapSequence` is not comparable today.** It has a `func` field, so `==`, map keys and `slices.Contains` are all unavailable — the reason `TestGapSequenceGoldenTerms` matches cases to the catalog by position and a length assertion rather than by identity. A `SequenceID` is comparable, map-keyable and sortable, which is what a registry, a CLI flag, or a `BENCHMARKS.md` result table each want.
+2. **Exhaustiveness.** With an enum, `go vet`/`exhaustive` can flag a catalog entry that was added but never registered. Right now that is caught only by the hand-written `require.Len(cases, len(allSequences))` guard.
+3. **`stringer` gives the label back for free**, so the struct can drop `Name` and shrink — which also removes the `fieldalignment` workaround noted in Phase 1.
+
+**On the performance argument specifically:** numeric comparison does beat string comparison, but it is worth being precise about where that would pay. There is no string comparison on the sorting path today — `WithGapSequence` will take a `GapSequence` value, and `Name` is only read when a test or benchmark formats a label. So the win is *structural* (comparability, exhaustiveness, registry lookups) rather than measurable in `ns/op`. If a future API does dispatch by name — a `--gap-sequence=tokuda` flag, a `map[string]GapSequence` lookup per call — then the numeric form becomes a real cost argument too, and an `O(1)` array index by ID beats a map hash either way.
+
+**Cost:** a generated `sequenceid_string.go` plus a `stringer` dependency (`golang.org/x/tools/cmd/stringer`) in the toolchain, and CI needs `go generate` output checked in or verified.
+
+### 3.1.2 — Retrospective: measured improvement per phase
+
+**Absorb into:** Phase 6 (build it) and Phase 7 (first real entry) · **Status:** ⬜ open
+
+Track what each phase actually bought, rather than only reporting the final number. `docs/bench-baseline.txt` from Phase 0 is the first data point; the intent is a performance changelog that answers "which change earned the speedup".
+
+Shape:
+
+- One recorded artifact per phase that can move performance — `docs/bench-phase{N}.txt` — produced the same way every time (same `-count`, same machine, same `GOMAXPROCS`), so `benchstat docs/bench-baseline.txt docs/bench-phase7.txt` is always valid.
+- A `make bench-record PHASE=n` target so the recording procedure is not retyped and cannot drift.
+- Every recorded run must include the `slices.Sort` control measured in the same session — Phase 4 learned this the hard way, when the unchanged stdlib sort drifted 10.85% between two recording sessions and would have been credited to Tokuda.
+- A cumulative table at the top of `docs/BENCHMARKS.md`: phase, commit, what changed, sec/op at each size, delta vs the previous phase, delta vs baseline, and delta vs `slices.Sort` — the last column being the one that says whether the library is worth using at all.
+
+**The measurement caveat this has to respect:** Phase 0 recorded ±13–24% variance on `ShellSort` on this machine, so a phase-to-phase delta smaller than roughly 25% is not distinguishable from noise at `-count=10`. Either raise `-count` substantially for recorded runs or report benchstat's p-value alongside each delta and treat anything above 0.05 as "no measured change". A retrospective table that presents noise as progress is worse than no table.
+
+### 3.1.4 — Allocation regression from Phase 4
+
+**Absorb into:** Phase 7 (it rewrites the goroutine machinery, which is half the cause) · **Status:** ⬜ open
+
+Phase 4 took `ShellSort` from 4–5 allocations per call to 11–12, and from 168–329 B/op to 488–616 B/op. Both causes were deliberate side effects rather than mistakes:
+
+- The `append`-only gap generators grow through several reallocations where `make([]int, 10)` allocated once. That pre-sizing is exactly what padded short sequences with trailing zeros, so removing it was the point — but the gap count is predictable (`≈ log_r N`, ~12 for Tokuda at `N = 10^4`), so `make([]int, 0, 16)` would restore the single allocation without bringing the bug back, since the length still starts at zero.
+- The goroutine bodies became closures capturing `gap` and `start`, where the old code passed them as arguments to `go subSort(...)`.
+
+**Do not fix either in isolation.** Phase 7 replaces one-goroutine-per-subarray with chunked workers, which changes the second cause entirely and may remove it. Fixing it now means measuring it twice and discarding the first answer.
+
+Worth keeping in proportion: 12 allocations and ~600 bytes to sort a 240 KB slice is not a problem anyone will notice. It is logged because an unexplained 3× allocation increase in a library is the kind of thing that erodes trust in the benchmark table, not because it costs anything.
+
+### 3.1.3 — Define the notation; explain the reasoning, not just the result
+
+**Absorb into:** applied to Phase 3 immediately; standing rule for Phases 6, 7 and 9 · **Status:** ✅ done for Phase 3, standing thereafter
+
+Phase 3's write-up was unreadable without already knowing the field — symbols like `μCO`, `μEX` and `Δ` were used unexplained, and the argument about the Pratt deviation was compressed into one dense paragraph. Measurement sections are the parts of this repo most likely to be read by someone who did not write them, which makes that the wrong place to be terse.
+
+Fixed for Phase 3:
+
+- [GAP_SEQUENCES.md §1](GAP_SEQUENCES.md) gained a **symbol table** — `N`, CO, EX, μ, trials, Δ — each spelled out in words, plus why comparisons and exchanges are the metrics that can be checked against a paper at all (they are implementation-independent; wall-clock is not).
+- §5.1's reproduction section now opens with *why* the check exists — a mistranscribed formula produces a plausible-looking sequence that no ordinary test can catch — before any numbers appear.
+- The Pratt deviation is now three numbered checks in plain language instead of one dense paragraph.
+- Phase 3 above gained the same framing and a short vocabulary list.
+
+**Standing rule for the phases that produce numbers:**
+
+1. Spell out any symbol at first use, or link to the glossary. `μ` means mean; do not assume it.
+2. State what is being measured and why *before* showing the measurement.
+3. When a number disagrees with an expectation, show the reasoning that led to the verdict — what was suspected, what was tested, what it ruled out. A conclusion with no visible reasoning cannot be checked by a reader, which makes it worth very little.
+4. Say plainly when a difference is too small to mean anything (see 3.1.2's variance caveat) rather than reporting it as a result.
+
+---
+
+## Phase 4 — Options API + generics
+
+`git commit -m "feat(sort): generic ShellSort with functional options"`
+
+Now the public API changes. `lib/sort.go` stays in place — the move is Phase 8, so no behavioural change hides inside a rename.
+
+- [x] Generic signature matching stdlib's shape; type inference keeps existing int-slice call sites compiling unchanged:
+      ```go
+      func ShellSort[S ~[]E, E cmp.Ordered](x S, opts ...Option) S
+      func subSort[T cmp.Ordered](x []T, gap, start int) // no pointer, no *sync.WaitGroup param
+      ```
+- [x] Functional options, resolving the TODO at `lib/sort.go:9`:
+      ```go
+      type Option func(*config)
+      func WithGapSequence(g GapSequence) Option
+      ```
+      **`WithParallelThreshold` was deliberately not added here.** The plan had it landing in Phase 4 and being "wired up in Phase 7", which would have shipped an exported option that silently did nothing for a whole phase — worse than either alternative. It now arrives in Phase 7 together with the behaviour it controls. Adding an option later is additive and non-breaking, so nothing is lost by waiting.
+- [x] **Decided with user (backlog 3.1.1):** `WithGapSequence` takes a `GapSequence` value, not a `SequenceID` enum. An enum would be comparable and exhaustiveness-checkable, but it closes the catalog — callers could no longer supply their own generator, which is a poor trade in a library whose entire subject is gap sequences. `TestShellSortWithGapSequence` covers the caller-supplied path
+- [x] Default is `Tokuda` — closed form, unbounded, ~17 passes at `10^6`, ties every Ciura variant on comparisons at `N = 10^4` while beating all of them on exchanges, and its `N`-scaling first gap matters most for the parallel structure (GAP_SEQUENCES.md §6.3, §7.1)
+- [x] Drop `selectStepSedgewick` — `selectStepHibbard` already went in Phase 2 when `unused` flagged it. Both now live in the catalog as `Sedgewick86` / `Hibbard`, per the user's decision to keep Hibbard selectable rather than delete it
+- [x] Remove dead code: commented bubble sort (`lib/sort.go:87-94`), commented trim lines (`:55`, `:76`), commented duplicate swap (`:103-104`)
+- [x] `subSort` takes no `*sync.WaitGroup` — the `if step < 5 { defer wg.Done() }` coupling at `lib/sort.go:81` is what makes the current signature load-bearing; caller owns the barrier
+- [x] Doc comment on every exported identifier — preserves the zero-lint baseline
+- [x] Update `cmd/main.go` if the call site needs it (it shouldn't — inference covers it) — it did not, and `go run ./cmd` still prints sorted output
+- [x] **Added, not in the original plan:** `TestShellSortGenericElements` and `TestShellSortWithGapSequence`. Phase 5 rebuilds the test suite, but shipping a new public API with nothing exercising it for a full phase is not defensible. They cover `string` / `float64` / a named `~[]int` type, all 18 catalog sequences through the option, a caller-supplied sequence, and last-option-wins
+- [x] **Behaviour held constant apart from the default sequence.** The `< 5` parallel rule is preserved verbatim (now `parallelSubarrayCeiling`) with its critique in the doc comment, so this phase's diff is an API change plus a default change, and Phase 7's measurements stay attributable
+- [x] Recorded `docs/bench-phase4.txt` — first entry for the retrospective table in backlog 3.1.2, isolating what the switch to Tokuda bought:
+
+      `benchstat docs/bench-baseline.txt docs/bench-phase4.txt`, `-count=10`:
+
+      | Benchmark | baseline | phase 4 | vs base |
+      | --- | --- | --- | --- |
+      | `ShellSort/1000` | 100.1µ ± 13% | 104.0µ ± 11% | ~ (p=0.247) |
+      | `ShellSort/10000` | 1.360m ± 18% | 1.269m ± 10% | ~ (p=0.075) |
+      | `ShellSort/30000` | 6.079m ± 24% | 4.434m ± 19% | **−27.05%** (p=0.011) |
+      | `StdSort/1000` | 54.95µ ± 46% | 52.62µ ± 7% | ~ (p=0.353) |
+      | `StdSort/10000` | 736.4µ ± 7% | 707.5µ ± 7% | ~ (p=0.089) |
+      | `StdSort/30000` | 2.541m ± 8% | 2.266m ± 3% | −10.85% (p=0.000) |
+
+      **Read this with the control in mind.** `slices.Sort` is unchanged code, so its −10.85% at 30 000 is pure environment drift between the two recording sessions, not an improvement. Dividing it out leaves roughly **−18%** genuinely attributable to Tokuda at `N = 30 000`, and nothing measurable at 1 000 or 10 000. This is exactly the trap backlog 3.1.2 was written to avoid: the headline −27% would have been a third machine noise.
+
+      The lesson for Phase 6: **record the `slices.Sort` control in the same session as everything it will be compared against**, or cross-session deltas cannot be trusted at all.
+
+      Allocations regressed, deterministically (±0% on every sample):
+
+      | Benchmark | baseline | phase 4 |
+      | --- | --- | --- |
+      | `ShellSort/1000` | 168 B, 4 allocs | 488 B, 11 allocs |
+      | `ShellSort/10000` | 168 B, 4 allocs | 616 B, 12 allocs |
+      | `ShellSort/30000` | 329 B, 5 allocs | 616 B, 12 allocs |
+
+      Two causes, both introduced deliberately: the `append`-only generators grow the gap slice through several reallocations where `make([]int, 10)` was one (that pre-sizing is what produced trailing zeros, so the trade was intended), and the goroutine bodies are now closures capturing `gap` and `start` rather than plain function arguments. The percentages look alarming; the absolute numbers are ~600 bytes and 12 allocations per call to sort a 240 KB slice, which is noise. Parked as backlog 3.1.4 rather than fixed here, since Phase 7 rewrites the goroutine machinery anyway and would invalidate any fix made now
+
+**Gate:** ✅ `go build ./... && go vet ./...` clean; the pre-existing tests pass **unmodified**, which is the real evidence that type inference kept the old call sites working; `golangci-lint` still `0 issues.`
+
+---
+
+## Phase 5 — Test rebuild
+
+`git commit -m "test(sort): oracle-based table tests, all-sequences loop, fuzz target"`
+
+- [x] Shared seeded generator replacing the fixtures:
+      ```go
+      func randomSlice(tb testing.TB, n int, seed1, seed2 uint64) []int {
+          tb.Helper()
+          return rand.New(rand.NewPCG(seed1, seed2)).Perm(n)
+      }
+      ```
+      Plus `ascendingSlice` / `descendingSlice` for the ordered shapes.
+- [x] Rewrite `TestShellSort` — 8 cases: nil, empty, single, random 16/100/500, already-sorted 100, reverse-sorted 100. `nil` and `empty` are distinct cases on purpose: `ShellSort` returns its argument, so the two differ in the returned slice's nil-ness
+- [x] Oracle is `slices.Sort` on a clone, not a literal — extracted as `requireSorts(t, input, opts...)`, which clones the input for both the oracle and the call under test. Fixes the in-place-mutation bug where the old test's second assertion was trivially true
+- [x] `TestShellSortAllSequences` — the case table × the whole catalog, **163 passing subtests** (18 sequences × 8 cases, plus parents)
+- [x] `FuzzShellSort` (stdlib `testing.F`) — fuzzes `(seed int64, n uint8)` with values from `rng.IntN(8)` so duplicates and ties appear, which `Perm` structurally cannot produce. Seed corpus covers empty, single, 37, 255. **289 435 executions in a 25 s run, no failures**; the seed corpus alone runs under plain `go test ./...`
+- [x] **Added, not in the original plan:** `TestShellSortSortsInPlace`, pinning the aliasing contract that the doc comment on `ShellSort` promises — that the returned slice *is* the argument, sorted, not a copy. Nothing else in the suite would catch a change to a copy-returning implementation, since every other assertion only looks at the return value
+- [x] **Trimmed:** `TestShellSortWithGapSequence`'s per-sequence loop, added during Phase 4 as interim coverage, is now redundant with `TestShellSortAllSequences` (which covers the same 18 sequences across 8 shapes instead of 1). What remains is the part the catalog loop cannot cover: a caller-supplied `GapSequence` and last-option-wins precedence
+- [x] Keep `lib/slices.go` for now — `cmd/main.go` still imports it; deletion is Phase 8
+
+**Gate:** ✅ `go vet ./...` clean, `go test -race ./lib/` green in 9.2 s, `golangci-lint run` at `0 issues.`
+
+---
+
+## Phase 6 — Benchmark matrix
+
+`git commit -m "test(bench): full sequence × size × shape matrix"` + `docs: add measured benchmark results`
+
+The central question — which sequence is fastest *here* — is not answerable from the literature. Published rankings are dominated by comparison counts measured in Python, and the top group is separated by under 2% (GAP_SEQUENCES.md §5.1), well inside what goroutine overhead and cache behaviour will swamp in this implementation.
+
+**Three metrics, measured separately. They disagree, and that disagreement is the finding:**
+
+1. **Comparisons** — literature-comparable, implementation-independent (harness from Phase 3)
+2. **Exchanges** — Pratt beats Tokuda by ~30% here while losing 3.1× on comparisons
+3. **Wall-clock + allocs/op** — the only metric that decides the default
+
+- [ ] `Sort/{sequence}/n={size}` across the full catalog, `benchSizes = {1_000, 10_000, 100_000}`
+- [ ] `Sort/std/n={size}` — `slices.Sort` baseline on the identical base permutation
+- [ ] `Sort/{parallel,sequential}/{best sequence}/n={size}` — quantifies the goroutine machinery against `WithParallelThreshold` disabled. GAP_SEQUENCES.md §6 predicts a modest ceiling; this measures it
+- [ ] Input shapes beyond random permutations: already-sorted, reverse-sorted, few-unique. Weiss's `O(N log N)` result for reverse-ordered input means the adversarial case for plain insertion sort is *not* adversarial for Shellsort — the suite should show that
+- [ ] **Measurement hygiene:** pre-clone all iterations' inputs before `b.ResetTimer()` rather than calling `b.StopTimer()`/`b.StartTimer()` inside the loop — the current helper pays timer-toggle overhead every iteration, significant at these sizes
+- [ ] Run `make bench-record && make bench-stat` (defaults to `-count=20` against `docs/bench-baseline.txt`). **`-count=10` is not enough here** — Phase 0 measured ±13–24% spread on `ShellSort`, and a 3-count control run against that baseline with *zero code changed* reported `ShellSort/30000-4  -27.05% (p=0.028)`. Check the reported `±` before trusting any delta; a p-value under a wide spread is not a result
+- [ ] Write `docs/BENCHMARKS.md` — the empirical answer belongs next to the literature survey
+- [ ] Flip the default in Phase 4's config if the data disagrees with Tokuda, and say why in `BENCHMARKS.md`
+
+**Gate:** `docs/BENCHMARKS.md` exists with benchstat output for the full matrix.
+
+---
+
+## Phase 7 — Parallel redesign
+
+`git commit -m "perf(sort): chunk goroutines and thread parallelism by work per subarray"`
+
+Separate commit from Phase 6 so the effect is attributable. Two constructs in the current code are unjustified, and GAP_SEQUENCES.md §6 explains why.
+
+- [ ] Replace `if d[...] < 5` (`lib/sort.go:19`) — it parallelizes only when there are *fewer* than 5 subarrays, i.e. exactly when there is least parallelism available and each subarray is longest, so the wide early passes run sequentially. Threshold on **work per subarray** instead (`len(x)/gap >= minSubarrayLen`), so parallelism follows the work rather than the subarray count. Wire it to `WithParallelThreshold`
+- [ ] Remove `d*3 < float64(length)` (`lib/sort.go:41`, `:47`) from the shared path — an undocumented cap that silently drops the largest gaps. Knuth's rule is to stop at `⌈N/3⌉`, which is a *stopping condition for the generator*, not a filter applied to every element. Fold it into the `Knuth` generator where it belongs
+- [ ] **Decouple goroutine count from gap count.** One goroutine per subarray means the first pass of a closed-form sequence spawns thousands of goroutines each sorting a handful of elements. Chunk instead: partition the `gap` subarrays across `min(gap, GOMAXPROCS)` workers
+- [ ] Re-run the Phase 6 matrix, before/after, as its own line in the study — this is likely the single largest available win and is independent of sequence choice
+- [ ] `go test -race ./...` — the chunking rewrite is the highest-risk change in the plan for data races
+- [ ] Record results in `docs/BENCHMARKS.md`
+
+**What will *not* improve, and should be stated in the doc rather than chased:** the final `h = 1` pass is a single subarray of `N` elements and is unparallelizable, so span is dominated by the low-width tail passes regardless of sequence or chunking. Amdahl caps the whole approach. Sequence choice changes barrier count (~17 for Tokuda vs ~125 for Pratt at `N = 10^6`), not the floor.
+
+**Gate:** benchstat before/after in `BENCHMARKS.md`; race detector clean.
+
+---
+
+## Phase 8 — Restructure to root package
+
+`git commit -m "refactor: move package to repo root as shellsort"`
+
+Pure moves, last, so no behavioural change hides inside a rename. Ideally a `git mv`-only diff plus import-path edits.
+
+- [ ] `lib/sort.go` → `sort.go`, `package lib` → `package shellsort`; `lib/gaps.go` → `gaps.go`
+- [ ] `lib/sort_test.go` → `sort_test.go` + `sort_bench_test.go` + `fuzz_test.go`; `lib/gaps_test.go` → `gaps_test.go`; `lib/gaps_bench_test.go` → `gaps_bench_test.go`
+- [ ] Delete `lib/slices.go` and the now-empty `lib/`
+- [ ] `cmd/main.go` → `examples/shellsort/main.go`; import path becomes `github.com/OlegElizarov/Shell_Sort_Golang` aliased `shellsort` (last path segment won't lexically match the package name — normal in Go). Demo builds a seeded slice inline instead of importing the removed fixtures
+- [ ] Update `Makefile`: `BENCH_PKG ?= ./lib/...` → `.`, and `test-short` / `demo` paths. **This is the one thing the restructure breaks that the compiler won't catch**
+- [ ] No changes to `.github/workflows/ci.yml` or `go.mod` — CI globs `./...`, the benchmark smoke step goes through `make bench-smoke` (package path lives in the Makefile), module path unchanged. Verify rather than assume
+- [ ] `go build ./... && go test -race ./... && go run ./examples/shellsort`
+
+**Gate:** tests pass with no edits to test *logic* — only package clause and imports.
+
+---
+
+## Phase 9 — Docs
+
+`git commit -m "docs: update README and CLAUDE.md for the new layout"`
+
+- [ ] `README.md` — import path, `go run ./examples/shellsort`, sequence catalog, link to `BENCHMARKS.md`
+- [ ] `CLAUDE.md` — paths, package name, resolved TODO, new commands. Note it currently claims `main.go` is at the repo root, which is **already stale**
+- [ ] GAP_SEQUENCES.md §5.1 — measured results alongside the published ones
+- [ ] Mark this plan complete; move it to `docs/archive/` or leave with all boxes ticked
+
+**Gate:** `gopls check ./...` — zero diagnostics, confirming doc-comment coverage on the ~20 new exported identifiers.
+
+---
+
+## Verification (full run, after Phase 9)
+
+- [ ] `go build ./...`, `go vet ./...` — clean across the new layout
+- [ ] `go test -v -race ./...` — table tests, all-sequences loop, contract + golden terms, fuzz seed corpus, no benchmark data race
+- [ ] `go test -bench=. -benchmem ./...` — full matrix across sizes, sequences, input shapes, parallel/sequential
+- [ ] Literature reproduction (Phase 3) still passes
+- [ ] `golangci-lint run --timeout=5m` — zero new diagnostics vs the Phase 0 baseline
+- [ ] `gopls check ./...` — zero diagnostics
+- [ ] `go run ./examples/shellsort` — demo still prints sorted output
+
+---
+
+## Appendix A — Gap sequence catalog
+
+Implemented in Phase 1. Each is a handful of lines; the point of having them all is that Phase 6's study is only meaningful across the full field, including the known-bad ones as controls. Analysis and citations: [GAP_SEQUENCES.md](GAP_SEQUENCES.md).
+
+Two rows below were corrected during Phase 1: `Pratt25`'s terms had listed 15 (= 3·5, not `2^p·5^q`) and `Pratt34`'s had listed 24 (= 2³·3, not `3^p·4^q`). Both are now generated from the definitions and verified against the sources.
+
+| Exported name | Formula | First terms | Role |
+| --- | --- | --- | --- |
+| `Tokuda` | `⌈h'⌉`, `h' = 2.25h' + 1`, `h'_1 = 1` | 1, 4, 9, 20, 46, 103, 233, 525 | **default** |
+| `Ciura` | fixed table + `⌊2.25h⌋` extension | 1, 4, 10, 23, 57, 132, 301, 701, 1750 | best measured comparisons |
+| `Ciura128` | fixed table, searched for `N = 128` | 1, 4, 9, 24, 85, 126 | small-`N` reference |
+| `Ciura1000` | fixed table, searched for `N = 1000` | 1, 4, 10, 23, 57, 156, 409, 995 | mid-`N` reference |
+| `Knuth` | `3h + 1`, capped at `⌈N/3⌉` | 1, 4, 13, 40, 121, 364 | integer-only fallback |
+| `Lee` | `⌈(γ^k − 1)/(γ − 1)⌉`, γ = 2.243609061420001 | 1, 4, 9, 20, 45, 102, 230, 516 | tuned Tokuda variant |
+| `SkeanB` | `⌊a·b^(i/c) + d⌋`, a=4.0816, b=8.5714, c=2.2449, d=0 | 1, 4, 10, 27, 72, 187, 488 | ratio 2.604, large-`N` comparisons |
+| `Pratt` | 3-smooth `2^p·3^q` | 1, 2, 3, 4, 6, 8, 9, 12, 16 | best worst case; **best exchanges** |
+| `Pratt25` | `2^p·5^q` | 1, 2, 4, 5, 8, 10, 16, 20 | best exchanges measured |
+| `Pratt34` | `3^p·4^q` | 1, 3, 4, 9, 12, 16, 27 | Pratt family, fewer comparisons |
+| `Sedgewick86` | piecewise even/odd `k` | 1, 5, 19, 41, 109 | current default, keep for continuity |
+| `Sedgewick82` | `4^k + 3·2^{k−1} + 1` | 1, 8, 23, 77, 281 | ratio-4 datapoint |
+| `Hibbard` | `2^k − 1` | 1, 3, 7, 15, 31 | keep per user decision |
+| `PapernovStasevich` | `2^k + 1`, prefixed 1 | 1, 3, 5, 9, 17, 33 | ratio-2 control |
+| `IncerpiSedgewick` | constructed, coprime triangle | 1, 3, 7, 21, 48, 112 | best asymptotic exponent |
+| `FrankLazarus` | `2⌊N/2^{k+1}⌋ + 1` | …, 3, 1 (`N`-derived) | `N`-dependent control |
+| `GonnetBaezaYates` | `max(⌊(5h−1)/11⌋, 1)` from `h_0 = N` | 1, 3, 8, 19, 42, 93, 206, 454 (`N`=1000) | ratio-2.2, `Θ(N²)` for some `N` |
+| `Shell` | `⌊N/2^k⌋` | N/2, N/4, …, 1 | negative control (`Θ(N²)`) |
+
+## Appendix B — Critical files
+
+| Path | Fate | Phase |
+| --- | --- | --- |
+| `lib/sort.go` | → `sort.go`, generic + options | 4, 7, 8 |
+| `lib/gaps.go` | new, then → `gaps.go` | 1, 8 |
+| `lib/gaps_test.go` | new, then → `gaps_test.go` | 2, 8 |
+| `lib/gaps_bench_test.go` | new (counting harness) | 3 |
+| `lib/sort_test.go` | → `sort_test.go` + `sort_bench_test.go` + `fuzz_test.go` | 5, 6, 8 |
+| `lib/slices.go` | deleted | 8 |
+| `cmd/main.go` | → `examples/shellsort/main.go` | 8 |
+| `README.md`, `CLAUDE.md` | updated | 9 |
+| `docs/GAP_SEQUENCES.md` | measured results added | 3, 9 |
+| `docs/BENCHMARKS.md` | new | 6, 7 |
+| `docs/bench-baseline.txt` | new | 0 |
