@@ -15,24 +15,133 @@ import (
 // happens to default to on a given machine or CI runner.
 var benchGOMAXPROCS = runtime.NumCPU()
 
+// randomSlice returns a deterministic permutation of 0..n-1. Seeding
+// explicitly per call site keeps every case reproducible from its own two
+// constants, which the previous rand.IntN-based lengths were not.
+func randomSlice(tb testing.TB, n int, seed1, seed2 uint64) []int {
+	tb.Helper()
+	return rand.New(rand.NewPCG(seed1, seed2)).Perm(n)
+}
+
+// ascendingSlice returns 0..n-1 in order.
+func ascendingSlice(n int) []int {
+	s := make([]int, n)
+	for i := range s {
+		s[i] = i
+	}
+	return s
+}
+
+// descendingSlice returns n-1..0, the worst case for a plain insertion sort.
+func descendingSlice(n int) []int {
+	s := ascendingSlice(n)
+	slices.Reverse(s)
+	return s
+}
+
+// sortCase is one input shape. Cases are shared between TestShellSort and
+// TestShellSortAllSequences so that adding a shape covers the default sequence
+// and all 18 catalog sequences at once.
+type sortCase struct {
+	Name  string
+	Input []int
+}
+
+// sortCases covers the boundaries (nil, empty, single) and the three orderings
+// whose costs differ: random, already sorted, and reversed. Sizes straddle the
+// gap sequences' early terms so that short inputs exercise the one-pass path
+// and longer ones exercise several passes.
+func sortCases(tb testing.TB) []sortCase {
+	tb.Helper()
+	return []sortCase{
+		{Name: "nil", Input: nil},
+		{Name: "empty", Input: []int{}},
+		{Name: "single", Input: []int{42}},
+		{Name: "random 16", Input: randomSlice(tb, 16, 1, 2)},
+		{Name: "random 100", Input: randomSlice(tb, 100, 3, 4)},
+		{Name: "random 500", Input: randomSlice(tb, 500, 5, 6)},
+		{Name: "already sorted 100", Input: ascendingSlice(100)},
+		{Name: "reverse sorted 100", Input: descendingSlice(100)},
+	}
+}
+
+// requireSorts checks one input against the stdlib oracle. Both sides clone the
+// same input, so the oracle is compared against untouched data — the previous
+// version of this test asserted against a hardcoded literal and then called
+// ShellSort a second time on the slice the first call had already sorted in
+// place, which made the second assertion true no matter what ShellSort did.
+func requireSorts(t *testing.T, input []int, opts ...Option) {
+	t.Helper()
+
+	want := slices.Clone(input)
+	slices.Sort(want)
+
+	got := ShellSort(slices.Clone(input), opts...)
+
+	require.Equal(t, want, got)
+}
+
 func TestShellSort(t *testing.T) {
 	t.Parallel()
-	testCases := []struct {
-		Name     string
-		Input    []int
-		Expected []int
-	}{
-		{Name: "Short slice test", Input: IntSliceShort, Expected: IntSliceCorrect},
-		{Name: "Big slice test", Input: IntSliceBig, Expected: IntSliceBigCorrect},
-		{Name: "Very big slice test", Input: IntSliceVeryBig, Expected: IntSliceVeryBigCorrect},
-	}
-	for _, tc := range testCases {
+	for _, tc := range sortCases(t) {
 		t.Run(tc.Name, func(t *testing.T) {
 			t.Parallel()
-			require.Equal(t, ShellSort(tc.Input), tc.Expected)
-			require.True(t, slices.IsSorted(ShellSort(tc.Input)))
+			requireSorts(t, tc.Input)
 		})
 	}
+}
+
+// TestShellSortAllSequences runs the full case table against every sequence in
+// the catalog. This is what the GapSequence contract buys: one loop covers all
+// 18 implementations, so a generator that violates the contract in a way the
+// contract test misses still surfaces here as a mis-sorted slice.
+func TestShellSortAllSequences(t *testing.T) {
+	t.Parallel()
+	cases := sortCases(t)
+	for _, seq := range allSequences {
+		t.Run(seq.Name, func(t *testing.T) {
+			t.Parallel()
+			for _, tc := range cases {
+				t.Run(tc.Name, func(t *testing.T) {
+					t.Parallel()
+					requireSorts(t, tc.Input, WithGapSequence(seq))
+				})
+			}
+		})
+	}
+}
+
+// TestShellSortSortsInPlace pins the documented aliasing contract: the
+// returned slice is the argument, already sorted, not a copy.
+func TestShellSortSortsInPlace(t *testing.T) {
+	t.Parallel()
+	in := randomSlice(t, 64, 7, 8)
+
+	got := ShellSort(in)
+
+	require.True(t, slices.IsSorted(in), "argument must be sorted in place")
+	require.Equal(t, in, got)
+}
+
+// FuzzShellSort checks ShellSort against the stdlib oracle on inputs with
+// duplicates. Values are drawn from a small range on purpose: Perm produces a
+// permutation, so every table case above has distinct elements and cannot
+// exercise ties at all.
+func FuzzShellSort(f *testing.F) {
+	f.Add(int64(1), uint8(0))
+	f.Add(int64(2), uint8(1))
+	f.Add(int64(3), uint8(37))
+	f.Add(int64(4), uint8(255))
+
+	f.Fuzz(func(t *testing.T, seed int64, n uint8) {
+		rng := rand.New(rand.NewPCG(uint64(seed), uint64(n)))
+		in := make([]int, n)
+		for i := range in {
+			in[i] = rng.IntN(8)
+		}
+
+		requireSorts(t, in)
+	})
 }
 
 // TestShellSortGenericElements instantiates ShellSort at element types other
@@ -65,24 +174,12 @@ func TestShellSortGenericElements(t *testing.T) {
 	})
 }
 
-// TestShellSortWithGapSequence checks that the option actually selects the
-// sequence, across the whole catalog and a caller-supplied one. Phase 5
-// replaces the fixture-based table above; this covers the new API in the
-// meantime.
+// TestShellSortWithGapSequence covers the parts of the option API that the
+// catalog loop in TestShellSortAllSequences does not: a sequence supplied by
+// the caller rather than taken from the catalog, and option precedence.
 func TestShellSortWithGapSequence(t *testing.T) {
 	t.Parallel()
-	rng := rand.New(rand.NewPCG(11, 13))
-	input := rng.Perm(500)
-	want := slices.Clone(input)
-	slices.Sort(want)
-
-	for _, seq := range allSequences {
-		t.Run(seq.Name, func(t *testing.T) {
-			t.Parallel()
-			got := ShellSort(slices.Clone(input), WithGapSequence(seq))
-			require.Equal(t, want, got)
-		})
-	}
+	input := randomSlice(t, 500, 11, 13)
 
 	t.Run("caller-supplied", func(t *testing.T) {
 		t.Parallel()
@@ -98,15 +195,12 @@ func TestShellSortWithGapSequence(t *testing.T) {
 				return gaps
 			},
 		}
-		got := ShellSort(slices.Clone(input), WithGapSequence(mine))
-		require.Equal(t, want, got)
+		requireSorts(t, input, WithGapSequence(mine))
 	})
 
 	t.Run("last option wins", func(t *testing.T) {
 		t.Parallel()
-		got := ShellSort(slices.Clone(input),
-			WithGapSequence(Shell), WithGapSequence(Ciura))
-		require.Equal(t, want, got)
+		requireSorts(t, input, WithGapSequence(Shell), WithGapSequence(Ciura))
 	})
 }
 

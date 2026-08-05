@@ -6,7 +6,7 @@ Written 2026-07-14. Revised 2026-08-03 to fold in [GAP_SEQUENCES.md](GAP_SEQUENC
 
 ## Progress
 
-`▰▰▰▰▰▱▱▱▱▱` **5 / 10 phases complete** — 40 / 70 tasks
+`▰▰▰▰▰▰▱▱▱▱` **6 / 10 phases complete** — 48 / 72 tasks
 
 | # | Phase | Tasks | Status | Gate |
 | --- | --- | --- | --- | --- |
@@ -16,7 +16,7 @@ Written 2026-07-14. Revised 2026-08-03 to fold in [GAP_SEQUENCES.md](GAP_SEQUENC
 | 3 | [Counting harness + literature validation](#phase-3--counting-harness--literature-validation) | 7 | ✅ done | **4 published counts reproduce** |
 | 3.1 | [Parked nits and small fixes](#phase-31--parked-nits-and-small-fixes) | 4 | 🅿️ backlog | absorbed by later phases |
 | 4 | [Options API + generics](#phase-4--options-api--generics) | 12 | ✅ done | old call sites still compile |
-| 5 | [Test rebuild](#phase-5--test-rebuild) | 6 | ⬜ not started | oracle-based, race-clean |
+| 5 | [Test rebuild](#phase-5--test-rebuild) | 8 | ✅ done | oracle-based, race-clean |
 | 6 | [Benchmark matrix](#phase-6--benchmark-matrix) | 8 | ⬜ not started | `docs/BENCHMARKS.md` exists |
 | 7 | [Parallel redesign](#phase-7--parallel-redesign) | 6 | ⬜ not started | before/after benchstat |
 | 8 | [Restructure to root package](#phase-8--restructure-to-root-package) | 6 | ⬜ not started | pure moves, tests unchanged |
@@ -345,20 +345,23 @@ Now the public API changes. `lib/sort.go` stays in place — the move is Phase 8
 
 `git commit -m "test(sort): oracle-based table tests, all-sequences loop, fuzz target"`
 
-- [ ] Shared seeded generator replacing the fixtures:
+- [x] Shared seeded generator replacing the fixtures:
       ```go
       func randomSlice(tb testing.TB, n int, seed1, seed2 uint64) []int {
           tb.Helper()
           return rand.New(rand.NewPCG(seed1, seed2)).Perm(n)
       }
       ```
-- [ ] Rewrite `TestShellSort` — table of `{Name, Size}` (empty, single, 16, 100, 500, plus explicit already-sorted and reverse-sorted)
-- [ ] Oracle is `slices.Sort` on a clone, not a literal: `want := slices.Clone(in); slices.Sort(want)` vs `got := ShellSort(slices.Clone(in))`. Explicit cloning fixes the in-place-mutation bug where the current test's second assertion is trivially true
-- [ ] `TestShellSortAllSequences` — run the correctness table against **every** catalog entry. Payoff of Phase 1's contract: one loop covers 18 implementations
-- [ ] `FuzzShellSort` (stdlib `testing.F`) — fuzz `(seed int64, n uint8)`, bounded value range so duplicates and ties appear (which `Perm` structurally cannot produce), assert against the `slices.Sort` oracle. Seed corpus includes empty and single-element. Runs under plain `go test ./...`
-- [ ] Keep `lib/slices.go` for now — `cmd/main.go` still imports it; deletion is Phase 8
+      Plus `ascendingSlice` / `descendingSlice` for the ordered shapes.
+- [x] Rewrite `TestShellSort` — 8 cases: nil, empty, single, random 16/100/500, already-sorted 100, reverse-sorted 100. `nil` and `empty` are distinct cases on purpose: `ShellSort` returns its argument, so the two differ in the returned slice's nil-ness
+- [x] Oracle is `slices.Sort` on a clone, not a literal — extracted as `requireSorts(t, input, opts...)`, which clones the input for both the oracle and the call under test. Fixes the in-place-mutation bug where the old test's second assertion was trivially true
+- [x] `TestShellSortAllSequences` — the case table × the whole catalog, **163 passing subtests** (18 sequences × 8 cases, plus parents)
+- [x] `FuzzShellSort` (stdlib `testing.F`) — fuzzes `(seed int64, n uint8)` with values from `rng.IntN(8)` so duplicates and ties appear, which `Perm` structurally cannot produce. Seed corpus covers empty, single, 37, 255. **289 435 executions in a 25 s run, no failures**; the seed corpus alone runs under plain `go test ./...`
+- [x] **Added, not in the original plan:** `TestShellSortSortsInPlace`, pinning the aliasing contract that the doc comment on `ShellSort` promises — that the returned slice *is* the argument, sorted, not a copy. Nothing else in the suite would catch a change to a copy-returning implementation, since every other assertion only looks at the return value
+- [x] **Trimmed:** `TestShellSortWithGapSequence`'s per-sequence loop, added during Phase 4 as interim coverage, is now redundant with `TestShellSortAllSequences` (which covers the same 18 sequences across 8 shapes instead of 1). What remains is the part the catalog loop cannot cover: a caller-supplied `GapSequence` and last-option-wins precedence
+- [x] Keep `lib/slices.go` for now — `cmd/main.go` still imports it; deletion is Phase 8
 
-**Gate:** `go test -v -race ./...` green, including the fuzz seed corpus.
+**Gate:** ✅ `go vet ./...` clean, `go test -race ./lib/` green in 9.2 s, `golangci-lint run` at `0 issues.`
 
 ---
 
